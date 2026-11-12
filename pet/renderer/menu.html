@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:">
+<title>김비서 펫 메뉴</title>
+<style>
+  /* 색 하나(분홍 #FF005A, 글자는 진한 #D6004C — 운영 캐릭터펫 메뉴와 같은 색), 단추 줄 = 4칸 같은 폭 격자, 굵기 600/500/400, 테두리 1px, 간격 8 단위, '항상 위' = 켜짐/꺼짐 스위치 */
+  :root { --ink: #262b40; --sub: #5d6382; --line: #d8dcea; --hover: #f2a7c3; --accent: #FF005A; --accent-ink: #D6004C; --accent-soft: #fff0f5; --bg: #ffffff; }
+  html, body { margin: 0; background: transparent; font-family: "Malgun Gothic", sans-serif; color: var(--ink); user-select: none; overflow: hidden; }
+  #card { margin: 8px; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 8px 24px rgba(30, 30, 70, 0.18); padding: 8px 16px 16px; }
+  header { display: flex; align-items: center; justify-content: space-between; }
+  header b { font-size: 18px; font-weight: 600; }
+  #x { width: 40px; height: 40px; border: 0; background: transparent; font-size: 24px; color: var(--sub); border-radius: 8px; cursor: pointer; margin-right: -8px; }
+  #x:hover { background: #f1f2f7; }
+  h2 { font-size: 15px; font-weight: 500; color: var(--sub); margin: 16px 0 8px; }
+  .outfits { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .outfits.one { grid-template-columns: 1fr; }
+  .outfits.one .outfit { display: flex; align-items: center; gap: 8px; text-align: left; }
+  .outfits.one .outfit span { font-size: 14px; }
+  .outfits.one .outfit img { width: 76px; }
+  .outfit { border: 1px solid var(--line); border-radius: 12px; background: #fff; padding: 4px 4px 8px; cursor: pointer; font: inherit; color: inherit; }
+  .outfit img { width: 100%; display: block; border-radius: 8px; }
+  .outfit span { display: block; font-size: 13px; font-weight: 500; margin-top: 4px; line-height: 1.25; word-break: keep-all; }
+  .outfit:hover { border-color: var(--hover); }
+  .outfit.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-ink); }
+  .row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .btn { min-height: 44px; border: 1px solid var(--line); border-radius: 8px; background: #fff; font: inherit; font-size: 15px; font-weight: 500; color: var(--ink); cursor: pointer; }
+  .btn:hover { border-color: var(--hover); }
+  .btn.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-ink); font-weight: 600; }
+  .toggle { display: flex; align-items: center; justify-content: space-between; margin-top: 16px; padding-top: 8px; border-top: 1px solid var(--line); }
+  .toggle b { font-size: 16px; font-weight: 500; }
+  /* 항상 위: 같은 버튼(menu.js 가 글자 켜짐/꺼짐 + .on 을 넣음)을 스위치 모양으로 — 왼쪽 트랙·손잡이, 오른쪽 글자 */
+  #ontop { position: relative; min-width: 0; padding: 0 8px 0 64px; border: 0; background: transparent; color: var(--sub); font-weight: 500; }
+  #ontop::before { content: ""; position: absolute; left: 8px; top: 50%; width: 44px; height: 24px; margin-top: -12px; border-radius: 12px;
+    background: #c3c7d4; transition: background 0.15s; }
+  #ontop::after { content: ""; position: absolute; left: 11px; top: 50%; width: 18px; height: 18px; margin-top: -9px; border-radius: 50%;
+    background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25); transition: transform 0.15s; }
+  #ontop:hover { border: 0; }
+  #ontop:hover::before { background: #b3b8c7; }
+  #ontop.on { background: transparent; color: var(--accent-ink); font-weight: 600; }
+  #ontop.on::before { background: var(--accent); }
+  #ontop.on::after { transform: translateX(20px); }
+  #ontop:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 2px; }
+  .wide3 { display: grid; grid-template-columns: 1fr 1fr 1.3fr; gap: 8px; margin-top: 8px; }
+  .wide3 .btn { font-size: 14px; min-height: 40px; padding: 0 4px; }
+  .empty { font-size: 14px; color: var(--sub); padding: 8px 0; }
+  .wide { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 16px; }
+  .btn.quit { color: #b4233a; }
+  #toast { min-height: 24px; font-size: 14px; color: var(--accent-ink); font-weight: 500; margin-top: 8px; text-align: center; }
+  #ver { font-size: 13px; color: var(--sub); text-align: right; }
+  #maker { font-size: 12px; color: var(--sub); text-align: right; margin-top: 2px; }
+  .wide.one { grid-template-columns: 1fr; margin-top: 8px; }
+</style>
+</head>
+<body>
+<div id="card">
+  <header><b>김비서 펫</b><button id="x" title="닫기">×</button></header>
+  <h2>옷 고르기</h2>
+  <div class="outfits" id="outfits"></div>
+  <div class="wide3">
+    <button class="btn" id="ward">옷 관리</button>
+    <button class="btn" id="wardget">옷 받기</button>
+    <button class="btn" id="packfile">파일로 옷 추가</button>
+  </div>
+  <h2>크기</h2>
+  <div class="row" id="sizes"></div>
+  <h2 id="music-h">춤 노래 크기</h2>
+  <div class="row" id="music"></div>
+  <div class="toggle"><b>항상 위에 두기</b><button class="btn" id="ontop"></button></div>
+  <div class="wide">
+    <button class="btn" id="speak">말하기 시험</button>
+    <button class="btn" id="home">오른쪽 아래로</button>
+  </div>
+  <div class="wide one"><button class="btn quit" id="quit">끝내기</button></div>
+  <div id="toast"></div>
+  <div id="ver"></div>
+  <div id="maker">김비서 · 하이라이프PC</div>
+</div>
+<script src="menu.js"></script>
+</body>
+</html>

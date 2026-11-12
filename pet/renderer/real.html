@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' data: blob:">
+<title>김비서 펫</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; user-select: none; -webkit-user-select: none; }
+  #stage { position: fixed; left: 0; top: 0; width: 960px; height: 960px; transform-origin: 0 0; animation: petIn 0.45s ease-out both; transition: opacity 0.22s; }
+  @keyframes petIn { from { opacity: 0; } to { opacity: 1; } }
+  #stage.out { opacity: 0; }
+  #stage video { position: absolute; opacity: 0; pointer-events: none; transition: opacity var(--fade, 0s) linear; }
+  #stage video.on { opacity: 1; }
+  /* 캔버스 그리기(body.cv): 영상은 화면에 안 올리고(display none) 지금 장을 창 픽셀 크기 캔버스에 고화질로 줄여 그림 — GPU 가속 없는 화면에서도 가장자리가 안 깨짐 */
+  #view { position: fixed; left: 0; top: 0; display: none; pointer-events: none; animation: petIn 0.45s ease-out both; transition: opacity 0.22s; }
+  #view.out { opacity: 0; }
+  body.cv #view { display: block; }
+  body.cv #stage { display: none; }
+  body.grab { cursor: grab; }
+  body.dragging { cursor: grabbing; }
+  #bubble { position: fixed; left: 0; top: 0; max-width: calc(100% - 12px); box-sizing: border-box; padding: 0.55em 0.8em;
+    background: #ffffff; color: #2a2f45; border: 2px solid #6b5bd6; border-radius: 14px; box-shadow: 0 3px 10px rgba(40, 40, 90, 0.18);
+    font-family: "Malgun Gothic", sans-serif; font-weight: 700; line-height: 1.38; word-break: keep-all; overflow-wrap: anywhere;
+    opacity: 0; transform: translateY(6px); transition: opacity 0.18s, transform 0.18s; pointer-events: none; z-index: 10; }
+  #bubble.show { opacity: 1; transform: none; }
+  #bubble::after { content: ""; position: absolute; left: var(--tail, 50%); bottom: -9px; width: 14px; height: 14px; margin-left: -7px;
+    background: #fff; border-right: 2px solid #6b5bd6; border-bottom: 2px solid #6b5bd6; transform: rotate(45deg); }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<canvas id="view"></canvas>
+<div id="bubble"></div>
+<script src="real/motion_names.js"></script>
+<script src="real.js"></script>
+</body>
+</html>

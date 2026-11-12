@@ -1,0 +1,282 @@
+{
+ "schema": "kimbiseo-models/1",
+ "note": "설치 때 받는 모델 목록. 크기·sha256·git_sha1 은 공식 저장소(huggingface.co 모델 API, blobs=true)에서 2026-11-11 에 읽은 값. sha256 = 큰 파일(LFS) 내용 해시, git_sha1 = 작은 파일의 git blob 해시. 값이 빈 칸이면 '설치 때 확인'(공식 해시를 못 찾음) — get_models.py 가 크기만 보고 받은 뒤 계산한 sha256 을 알려 줌. 두뇌(gemma — 0.1.4 부터 무검열 판이 기본, 구독 클로드·GPT 를 쓰면 안 받음)와 작은 귀(whisper-small)는 설치 프로그램이 사양에 맞춰 고른다(installer/plan.py).",
+ "models": [
+  {
+   "name": "gemma-4-E4B-it-abliterated-Q4_K",
+   "role": "두뇌(이 PC 에서, llama.cpp) — 무검열(abliterated) 판, 0.1.4 부터 기본",
+   "required": false,
+   "license": "Apache-2.0(Gemma 4 원본 조건 그대로, https://ai.google.dev/gemma/docs/gemma_4_license)",
+   "source": "https://huggingface.co/huihui-ai/Huihui-gemma-4-E4B-it-qat-q4_0-unquantized-abliterated-GGUF",
+   "revision": "bc37dec4db35ea0fcad97be7a8c6b3f6a499616b",
+   "base_url": "https://huggingface.co/huihui-ai/Huihui-gemma-4-E4B-it-qat-q4_0-unquantized-abliterated-GGUF/resolve/{revision}/",
+   "size_total": 5302272352,
+   "files": [
+    {
+     "path": "Huihui-gemma-4-E4B-it-qat-q4_0-unquantized-abliterated-Q4_K.gguf",
+     "size": 5302272352,
+     "sha256": "64434f2da081f912729e5c4732def7303eb5244d3fee493b9675bc4e9af52d4c"
+    }
+   ],
+   "note": "abliteration 원작자(huihui-ai) 공식 GGUF. 바탕 = google/gemma-4-E4B-it-qat-q4_0-unquantized. 크기·sha256 = HF 모델 API(blobs=true) 2026-11-11 값. 우리가 다시 나눠 주지 않음 — 사용자 PC 가 이 저장소에서 직접 받음. 거절을 줄인 모델이라 답을 사용자가 확인해야 함(모델 카드 경고)."
+  },
+  {
+   "name": "gemma-4-E2B-it-abliterated-Q4_K",
+   "role": "두뇌(이 PC 에서, llama.cpp) — 무검열(abliterated) 작은 판(E2B), 그래픽 메모리 6~8GB PC 용 선택지",
+   "required": false,
+   "license": "Apache-2.0(Gemma 4 원본 조건 그대로, https://ai.google.dev/gemma/docs/gemma_4_license)",
+   "source": "https://huggingface.co/huihui-ai/Huihui-gemma-4-E2B-it-qat-q4_0-unquantized-abliterated-GGUF",
+   "revision": "e38a3cdcf55879424c971d0961ea70b82870b989",
+   "base_url": "https://huggingface.co/huihui-ai/Huihui-gemma-4-E2B-it-qat-q4_0-unquantized-abliterated-GGUF/resolve/{revision}/",
+   "size_total": 3416118240,
+   "files": [
+    {
+     "path": "Huihui-gemma-4-E2B-it-qat-q4_0-unquantized-abliterated-Q4_K.gguf",
+     "size": 3416118240,
+     "sha256": "6bc1f421ba870b01a2efbb6904a28bda0ae3ccde57b18eb5e9203c3db05effe9"
+    }
+   ],
+   "note": "E4B 무검열 판과 같은 기준: abliteration 원작자(huihui-ai) 공식 GGUF, 바탕 = google/gemma-4-E2B-it-qat-q4_0-unquantized, 받은 수 14,863(2026-11-12, 이름에 abliterated 가 든 E2B GGUF 중 최다 — 미세조정 'uncensored'·heretic 방식은 다른 방식이라 뺌). 크기·sha256 = HF 모델 API(blobs=true) 2026-11-12 값. 우리가 다시 나눠 주지 않음 — 사용자 PC 가 이 저장소에서 직접 받음. 거절을 줄인 모델이라 답을 사용자가 확인해야 함(모델 카드 경고)."
+  },
+  {
+   "name": "gemma-4-E4B-it-Q4_K_M",
+   "role": "두뇌(이 PC 에서, llama.cpp)",
+   "required": false,
+   "license": "Apache-2.0",
+   "source": "https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF",
+   "revision": "bfc15c382204943c3a8fff0c750b94ae2364d7a3",
+   "base_url": "https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/resolve/{revision}/",
+   "size_total": 4977171584,
+   "files": [
+    {
+     "path": "gemma-4-E4B-it-Q4_K_M.gguf",
+     "size": 4977171584,
+     "sha256": "85a896a047553e842f25297ee5b031d64ff30147d9c4af17b1e4b394cd1fab87"
+    }
+   ],
+   "note": "3단계 시험 기준 두뇌(Q4_K_M, unsloth 판 — 구글·ggml-org 공식 저장소에는 Q4_K_M 이 없음). sha256 = HF 공식 값과 직접 계산 값이 같음(3단계)."
+  },
+  {
+   "name": "whisper-large-v3-turbo",
+   "role": "귀(받아쓰기)",
+   "required": true,
+   "license": "MIT",
+   "source": "https://huggingface.co/openai/whisper-large-v3-turbo",
+   "revision": "41f01f3fe87f28c78e2fbf8b568835947dd65ed9",
+   "base_url": "https://huggingface.co/openai/whisper-large-v3-turbo/resolve/{revision}/",
+   "size_total": 1622443339,
+   "files": [
+    {
+     "path": "added_tokens.json",
+     "size": 34648,
+     "git_sha1": "1b33526d33aaa60d79f78ae8651dae50b730185a"
+    },
+    {
+     "path": "config.json",
+     "size": 1256,
+     "git_sha1": "ad2f44ff1ed66e12765b2392dc041469db91a462"
+    },
+    {
+     "path": "generation_config.json",
+     "size": 3772,
+     "git_sha1": "cbe752958dc3e4671b0e0220aa1c545423a6d5f5"
+    },
+    {
+     "path": "merges.txt",
+     "size": 493869,
+     "git_sha1": "6038932a2a1f09a66991b1c2adae0d14066fa29e"
+    },
+    {
+     "path": "model.safetensors",
+     "size": 1617824864,
+     "sha256": "542566a422ae4f3fd23f1ba11add198fca01bbf82e66e6a2857b3f608b1eb9d1"
+    },
+    {
+     "path": "normalizer.json",
+     "size": 52666,
+     "git_sha1": "dd6ae819ad738ac1a546e9f9282ef325c33b9ea0"
+    },
+    {
+     "path": "preprocessor_config.json",
+     "size": 340,
+     "git_sha1": "931c77a740890c46365c7ae0c9d350ba3cca908f"
+    },
+    {
+     "path": "special_tokens_map.json",
+     "size": 2186,
+     "git_sha1": "312bc106291bb51bf2cc1648df070bef963a0639"
+    },
+    {
+     "path": "tokenizer.json",
+     "size": 2710337,
+     "git_sha1": "17456db595adc78a973f97d69d8cb50bc87c0b1c"
+    },
+    {
+     "path": "tokenizer_config.json",
+     "size": 282843,
+     "git_sha1": "06ffdc8308eae6bb7bd1fdd81e94b0a881a539ab"
+    },
+    {
+     "path": "vocab.json",
+     "size": 1036558,
+     "git_sha1": "0f3456460629e21d559c6daa23ab6ce3644e8271"
+    }
+   ],
+   "note": "transformers pipeline 으로 읽음(절반 정밀도 가중치 약 1.6GB)."
+  },
+  {
+   "name": "whisper-small",
+   "role": "귀(그래픽카드 없는 PC 용 작은 받아쓰기)",
+   "required": false,
+   "license": "Apache-2.0",
+   "source": "https://huggingface.co/openai/whisper-small",
+   "revision": "973afd24965f72e36ca33b3055d56a652f456b4d",
+   "base_url": "https://huggingface.co/openai/whisper-small/resolve/{revision}/",
+   "files": [
+    {
+     "path": "added_tokens.json",
+     "size": 34604,
+     "git_sha1": "e3d256c988462aa153dcabe2aa38b8e9b436c06f"
+    },
+    {
+     "path": "config.json",
+     "size": 1967,
+     "git_sha1": "113bb3efe3a7396f2ea629eef12637bd8085238d"
+    },
+    {
+     "path": "generation_config.json",
+     "size": 3868,
+     "git_sha1": "d3823179a367fa912e3b911b3d2e71ab2a028290"
+    },
+    {
+     "path": "merges.txt",
+     "size": 493869,
+     "git_sha1": "6038932a2a1f09a66991b1c2adae0d14066fa29e"
+    },
+    {
+     "path": "model.safetensors",
+     "size": 966995080,
+     "sha256": "1d7734884874f1a1513ed9aa760a4f8e97aaa02fd6d93a3a85d27b2ae9ca596b"
+    },
+    {
+     "path": "normalizer.json",
+     "size": 52666,
+     "git_sha1": "dd6ae819ad738ac1a546e9f9282ef325c33b9ea0"
+    },
+    {
+     "path": "preprocessor_config.json",
+     "size": 184990,
+     "git_sha1": "c2048dfa9fd94a052e62e908d2c4dfb18534b4d2"
+    },
+    {
+     "path": "special_tokens_map.json",
+     "size": 2194,
+     "git_sha1": "bf69932dca4b3719b59fdd8f6cc1978109509f6c"
+    },
+    {
+     "path": "tokenizer.json",
+     "size": 2480466,
+     "git_sha1": "1e95340ff836fad1b5932e800fb7b8c5e6d78a74"
+    },
+    {
+     "path": "tokenizer_config.json",
+     "size": 282683,
+     "git_sha1": "d13b786c04765fb1a06492b53587752cd67665ea"
+    },
+    {
+     "path": "vocab.json",
+     "size": 835550,
+     "git_sha1": "d7016e21da8776c8a9d577d0f559600f09a240eb"
+    }
+   ],
+   "note": "그래픽카드가 없는 PC 에서 큰 귀(whisper-large-v3-turbo, CPU 한 마디 약 15.7초) 대신 쓰는 작은 귀. 같은 whisper 길(transformers)로 읽음.",
+   "size_total": 971367937
+  },
+  {
+   "name": "Qwen3-TTS-12Hz-0.6B-Base",
+   "role": "목소리(김비서 음성 복제)",
+   "required": true,
+   "license": "Apache-2.0",
+   "source": "https://huggingface.co/Qwen/Qwen3-TTS-12Hz-0.6B-Base",
+   "revision": "5d83992436eae1d760afd27aff78a71d676296fc",
+   "base_url": "https://huggingface.co/Qwen/Qwen3-TTS-12Hz-0.6B-Base/resolve/{revision}/",
+   "size_total": 2516100892,
+   "files": [
+    {
+     "path": "config.json",
+     "size": 4494,
+     "git_sha1": "4e923f500f5c3eeb78d44072e7049b28817c2e04"
+    },
+    {
+     "path": "generation_config.json",
+     "size": 245,
+     "git_sha1": "1872b16d4535564abf2db5d6debe6cddd82b7f2e"
+    },
+    {
+     "path": "merges.txt",
+     "size": 1671839,
+     "git_sha1": "20024bfe7c83998e9aeaf98a0cd6a2ce6306c2f0"
+    },
+    {
+     "path": "model.safetensors",
+     "size": 1829344272,
+     "sha256": "180b3b10eb1c9f1b4db7806d5475bae3071c0243c299d49926bab1da3b6946f6"
+    },
+    {
+     "path": "preprocessor_config.json",
+     "size": 127,
+     "git_sha1": "0525dd953bb9241912f7147666f0d535165d5d4f"
+    },
+    {
+     "path": "speech_tokenizer/config.json",
+     "size": 2336,
+     "git_sha1": "06cc8dc4c5ec8a1929086b71b98c313020d9268b"
+    },
+    {
+     "path": "speech_tokenizer/configuration.json",
+     "size": 76,
+     "git_sha1": "ab58e2eaf53cd14a1a2a7527d9261ceea93a24cd"
+    },
+    {
+     "path": "speech_tokenizer/model.safetensors",
+     "size": 682293092,
+     "sha256": "836b7b357f5ea43e889936a3709af68dfe3751881acefe4ecf0dbd30ba571258"
+    },
+    {
+     "path": "speech_tokenizer/preprocessor_config.json",
+     "size": 234,
+     "git_sha1": "ba40914f4f49ab98a8ca545d4892ef7291a39592"
+    },
+    {
+     "path": "tokenizer_config.json",
+     "size": 7344,
+     "git_sha1": "6ff9fd60cc623bb54bbd603cbd418c97a11528d7"
+    },
+    {
+     "path": "vocab.json",
+     "size": 2776833,
+     "git_sha1": "4783fe10ac3adce15ac8f358ef5462739852c569"
+    }
+   ],
+   "note": "qwen_tts 0.1.1 로 읽음. 그래픽카드가 없으면 받지 않고 윈도우 기본 음성만 써도 됨."
+  },
+  {
+   "name": "titanet-small",
+   "role": "목소리 닮음 검사(선택)",
+   "required": false,
+   "license": "Apache-2.0(NVIDIA NeMo TitaNet, sherpa-onnx 변환판)",
+   "source": "https://github.com/k2-fsa/sherpa-onnx/releases/tag/speaker-recongition-models",
+   "revision": "release-asset-198917204@2024-10-14T07:03:03Z",
+   "base_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/",
+   "size_total": 40257283,
+   "files": [
+    {
+     "path": "nemo_en_titanet_small.onnx",
+     "size": 40257283,
+     "sha256": "ad4a1802485d8b34c722d2a9d04249662f2ece5d28a7a039063ca22f515a789e"
+    }
+   ],
+   "note": "크기 = GitHub 릴리스 API 값(자산 id 198917204, 2024-10-14 올림 — revision 칸). 릴리스에 공식 해시가 없어 2026-11-12 에 두 번 받아 계산한 sha256 으로 고정(같은 값) → 릴리스 파일이 바뀌면 설치가 멈춤. 설정 '목소리.닮음검사.켜기' 를 켠 사람만."
+  }
+ ]
+}

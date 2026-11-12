@@ -1,0 +1,69 @@
+{
+ "schema": "kimbiseo-runtimes/1",
+ "note": "설치 때 사용자 PC 가 공식 배포처에서 직접 받는 실행 파일. 판 고정 + sha256(공식 배포처가 알려 준 값, 파이썬은 python.org 의 md5 와도 대조). 우리가 다시 나눠 주지 않음.",
+ "python": {
+  "version": "3.11.9",
+  "why": "검증한 음성·본체 환경과 같은 3.11 계열 중 python.org 가 윈도우 실행본을 낸 마지막 판(3.11.10 부터는 소스만)",
+  "license": "PSF-2.0",
+  "url": "https://www.python.org/ftp/python/3.11.9/python-3.11.9-embed-amd64.zip",
+  "size": 11249023,
+  "sha256": "009d6bf7e3b2ddca3d784fa09f90fe54336d5b60f0e0f305c37f400bf83cfd3b",
+  "md5_python_org": "6d9aa08531d48fcc261ba667e2df17c4",
+  "pth": "python311._pth"
+ },
+ "pip": {
+  "version": "26.2.2",
+  "license": "MIT",
+  "url": "https://files.pythonhosted.org/packages/3f/06/3e4420302363fbb71be3c7f35ce042f54bfca330e3e66b3a2e3c4cca579f/pip-26.2.2-py3-none-any.whl",
+  "size": 1819850,
+  "sha256": "fd7f4dfa8190e014013b9f08f3e973f4e4c26ffd179a204895533a7254813a70"
+ },
+ "setuptools": {
+  "version": "84.2.1",
+  "why": "소스판만 있는 작은 꾸러미(docopt·proxy_tools·sox)를 빌드 격리 없이 만들 때 필요",
+  "license": "MIT",
+  "url": "https://files.pythonhosted.org/packages/ef/55/6dc6d6bb953bdfc52519a0059592c52b6e3b8ad51cf8256dffceb55b0610/setuptools-84.2.1-py3-none-any.whl",
+  "size": 876263,
+  "sha256": "ca140b45d5325a9478f880e351484f62fef15f336462e449ca0c03c873d589c2"
+ },
+ "llama_cpp": {
+  "version": "b12283",
+  "commit": "f3b407ca1bfeeecebf9e9ef19fcd6eed565bd70a",
+  "license": "MIT",
+  "release": "https://github.com/ggml-org/llama.cpp/releases/tag/b12283",
+  "note": "3단계 시험은 b12282(한 커밋 앞). 엔비디아 = CUDA 판(드라이버가 CUDA 13 을 받으면 13.5, 아니면 12.4) + 같은 판 CUDA 실행 라이브러리, 엔비디아가 아닌 그래픽카드 = 불칸, 없음 = CPU.",
+  "variants": {
+   "cuda13": [
+    {"file": "llama-b12283-bin-win-cuda-13.5-x64.zip", "size": 171031089, "sha256": "36b73a06d276b369d882ce7ffcfb4eab053f0f65cd394590ed5161b8b9eb8d5f",
+     "url": "https://github.com/ggml-org/llama.cpp/releases/download/b12283/llama-b12283-bin-win-cuda-13.5-x64.zip"},
+    {"file": "cudart-llama-bin-win-cuda-13.5-x64.zip", "size": 426314199, "sha256": "c2bf4cc202bfbaaa7a0b75f5082457c3811326947bb216059b72839d844e9cba",
+     "url": "https://github.com/ggml-org/llama.cpp/releases/download/b12283/cudart-llama-bin-win-cuda-13.5-x64.zip"}
+   ],
+   "cuda12": [
+    {"file": "llama-b12283-bin-win-cuda-12.4-x64.zip", "size": 288972616, "sha256": "b5a412657addd63beffeaf9179b0ce3dac3f436951aed573132864e2cd7630f0",
+     "url": "https://github.com/ggml-org/llama.cpp/releases/download/b12283/llama-b12283-bin-win-cuda-12.4-x64.zip"},
+    {"file": "cudart-llama-bin-win-cuda-12.4-x64.zip", "size": 391443627, "sha256": "8c79a9b226de4b3cacfd1f83d24f962d0773be79f1e7b75c6af4ded7e32ae1d6",
+     "url": "https://github.com/ggml-org/llama.cpp/releases/download/b12283/cudart-llama-bin-win-cuda-12.4-x64.zip"}
+   ],
+   "vulkan": [
+    {"file": "llama-b12283-bin-win-vulkan-x64.zip", "size": 38022362, "sha256": "58c3426f7473bc08135c83333259366521fc940e4ad7bc6ad2b26755cc42cb03",
+     "url": "https://github.com/ggml-org/llama.cpp/releases/download/b12283/llama-b12283-bin-win-vulkan-x64.zip"}
+   ],
+   "cpu": [
+    {"file": "llama-b12283-bin-win-cpu-x64.zip", "size": 25058174, "sha256": "dafb19ac757bfb7cfc1f91c6e26703264df861c4331e3ef6dc9543ae8d010c5e",
+     "url": "https://github.com/ggml-org/llama.cpp/releases/download/b12283/llama-b12283-bin-win-cpu-x64.zip"}
+   ]
+  },
+  "cuda13_min_driver": 580.0
+ },
+ "electron": {
+  "version": "45.2.3",
+  "license": "MIT (+ LICENSES.chromium.html 그대로 둠)",
+  "why": "펫 실행 틀. 운영 펫과 같은 판. 펫 소스(pet\\)는 이 틀 위에서 그대로 돎 — 사용자가 Node 를 깔 필요 없음",
+  "url": "https://github.com/electron/electron/releases/download/v45.2.3/electron-v45.2.3-win32-x64.zip",
+  "size": 158182975,
+  "sha256": "489cd061908e697394b004298bf5ffd345c935d10e8ca197ba819f019ab2dec0"
+ },
+ "hosts": ["www.python.org", "files.pythonhosted.org", "download.pytorch.org", "download-r2.pytorch.org",
+           "github.com", ".githubusercontent.com", "huggingface.co", ".hf.co"]
+}

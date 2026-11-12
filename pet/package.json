@@ -1,0 +1,15 @@
+{
+  "name": "kimbiseo-pet",
+  "productName": "김비서 펫",
+  "version": "0.1.2",
+  "description": "김비서 바탕화면 펫 — 김비서 본체의 표정·입·동작 신호를 받아 움직이는 캐릭터",
+  "main": "main.js",
+  "private": true,
+  "license": "Apache-2.0",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "45.2.3"
+  }
+}

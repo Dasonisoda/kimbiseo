@@ -1,0 +1,13 @@
+# 음성용 파이썬 환경(귀 + 목소리 한 환경) — 맨 위 꾸러미만. 설치는 locks/voice-cuda.json(엔비디아) 또는 locks/voice-cpu.json(그래픽카드 없음)
+# 대로 한다(정확한 판 + sha256, make_lock.py --torch cu128|cpu 로 만듦). torch·torchaudio 는 PyTorch 공식 저장소, 나머지는 PyPI.
+# 아래 판은 2단계 시험에서 실제로 귀(whisper)와 목소리(Qwen3-TTS)를 같은 환경에서 돌려 본 판.
+torch==2.11.0
+torchaudio==2.11.0
+qwen-tts==0.1.1          # transformers==4.57.3 · accelerate==1.12.0 을 고정해서 끌고 옴(gradio·sox·onnxruntime·einops·librosa 도)
+transformers==4.57.3     # 귀(whisper)도 이 판으로 동작 확인 — qwen-asr(4.57.6 고정)는 쓰지 않으므로 충돌 없음
+accelerate==1.12.0
+numpy==2.4.6
+soundfile==0.14.0
+librosa==0.11.0
+# 선택(목소리 닮음 검사, 기본 꺼짐): sherpa-onnx — 같은 환경에 넣는 것은 미확인(onnxruntime 겹침). 확인 전에는 따로 작은 환경 + 설정 '목소리.닮음검사.도우미_파이썬'
+# 넣지 않음: qwen-asr(쓰지 않음, transformers 판 충돌) · bitsandbytes · tensorboard(운영 환경에만 있던 것) · PyAV(목소리 서버는 없어도 됨 — 본체가 말 빠르기를 맞춤)

@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="ko" data-font="크게">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>김비서</title>
+<link rel="stylesheet" href="/ui/style.css">
+<link rel="icon" href="/ui/icon.svg" type="image/svg+xml">
+</head>
+<body>
+<div id="app">
+<header class="top pywebview-drag-region">
+  <span class="sr" id="top-name">김비서</span>
+  <button class="hbtn appOnly" id="win-min" type="button" title="작업 표시줄로 내리기"><span class="sr">내리기</span>
+    <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h12" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>
+  <div class="hspace pywebview-drag-region"></div>
+  <nav class="top-nav" id="top-nav">
+    <button class="hbtn" id="nav-main" type="button" title="대화"><span class="sr">대화</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M5 5h14v10H10l-4 4v-4H5z"/></svg></button>
+    <button class="hbtn" id="nav-memory" type="button" title="기억"><span class="sr">기억</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M6 4h10l3 3v13H6z"/><path d="M9 10h7M9 14h7M9 18h4"/></svg></button>
+    <button class="hbtn" id="nav-settings" type="button" title="설정"><span class="sr">설정</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/>
+      <path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7"/></svg></button>
+  </nav>
+  <button class="hbtn appOnly" id="win-close" type="button" title="김비서 끄기"><span class="sr">끄기</span>
+    <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 5l10 10M15 5L5 15" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>
+</header>
+
+<main id="view-wizard" class="view" hidden></main>
+
+<main id="view-main" class="view" hidden>
+  <section id="hero" class="pywebview-drag-region">
+    <div class="talk-face" id="talk-face" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><span class="sr" id="talk-initial">김</span></div>
+    <div>
+      <h1 class="talk-title" id="talk-title">김비서</h1>
+      <div class="sline"><span class="dot" id="top-dot"></span><span class="brand-state" id="top-state">준비 중</span></div>
+    </div>
+    <div class="tagline" id="tagline">음성 비서</div>
+  </section>
+
+  <section class="notice" id="aec-box" hidden></section>
+  <section class="notice warn" id="update-box" hidden></section>
+  <section class="notice warn" id="pending-box" hidden></section>
+
+  <h2 class="sr">대화 내용</h2>
+  <ol class="chat" id="chat" aria-live="polite"></ol>
+  <footer class="chat-foot">
+    <form class="chat-input" id="chat-form" autocomplete="off">
+      <button class="round" id="talk-btn" type="button" title="말로 대화 켜기"><span class="sr" id="talk-label">대화 시작</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true">
+        <rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg></button>
+      <label class="sr" for="chat-text">글로 말하기</label>
+      <input id="chat-text" type="text" maxlength="500" placeholder="메시지">
+      <button class="round" id="chat-send" type="submit" title="보내기 (Enter)"><span class="sr">보내기</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M12 19V5M6 11l6-6 6 6"/></svg></button>
+    </form>
+    <p class="talk-state" id="talk-state"><kbd>Enter</kbd> 보내기 · 마이크 단추로 말 걸기</p>
+  </footer>
+</main>
+
+<main id="view-memory" class="view panel" hidden>
+  <h1>기억 <button class="hbtn" id="mem-close" type="button" title="닫기"><span class="sr">닫기</span>
+    <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 5l10 10M15 5L5 15" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button></h1>
+  <p class="hint">비서가 기억하는 것이에요. 모두 이 PC 안에만 있어요. 필요 없는 것은 지울 수 있어요.</p>
+  <h2>기억하는 사실</h2>
+  <ul class="mem-list" id="mem-facts"></ul>
+  <h2>대화 일기</h2>
+  <ul class="mem-list" id="mem-diary"></ul>
+  <button class="btn danger wide" id="mem-clear" type="button">기억 모두 지우기</button>
+</main>
+
+<main id="view-settings" class="view panel" hidden></main>
+</div>
+
+<div class="toast" id="toast" role="status" hidden></div>
+<div class="dialog-back" id="dialog" hidden>
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
+    <h2 id="dialog-title">확인</h2>
+    <p id="dialog-text"></p>
+    <div class="row two">
+      <button class="btn" id="dialog-no" type="button">아니요</button>
+      <button class="btn danger" id="dialog-yes" type="button">네, 지울게요</button>
+    </div>
+  </div>
+</div>
+<audio id="spk" autoplay></audio>
+<audio id="sample" ></audio>
+
+<script src="/ui/audio.js"></script>
+<script src="/ui/app.js"></script>
+<script src="/ui/brain.js"></script>
+<script src="/ui/wizard.js"></script>
+<script src="/ui/settings.js"></script>
+<script src="/ui/update.js"></script>
+<script src="/ui/start.js"></script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+KimBiseo (김비서)
+Copyright 2026 The KimBiseo authors (see the maker line in README.md)
+
+This product's source code is licensed under the Apache License, Version 2.0
+(see LICENSE).
+
+The character assets (the name "김비서", its face, voice, and outfit packs) are
+NOT covered by the Apache License. They are provided under the separate terms
+in ASSETS-LICENSE.md.
+
+Notices for third-party components used by this product are kept in the
+THIRD_PARTY_LICENSES directory.
+
+----------------------------------------------------------------------
+김비서 (KimBiseo)
+저작권 2026 김비서 제작자 (README.md 의 제작 표기 참조)
+
+이 제품의 코드는 Apache License 2.0 으로 배포됩니다(LICENSE).
+캐릭터 자산(이름 '김비서'·얼굴·목소리·옷 꾸러미)은 Apache License 2.0 이 아니라
+ASSETS-LICENSE.md 의 조건을 따릅니다.
+이 제품이 쓰는 바깥 부품의 고지는 THIRD_PARTY_LICENSES 폴더에 둡니다.

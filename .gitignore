@@ -1,0 +1,49 @@
+# 파이썬 환경·캐시
+venv*/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# 노드·빌드 산출물
+node_modules/
+dist/
+build/
+out/
+
+# 모델·큰 파일 (설치 때 내려받음 — 저장소에 넣지 않음)
+models/
+*.gguf
+*.safetensors
+*.ckpt
+*.pt
+*.pth
+*.npz
+
+# 비밀·서명 열쇠
+secrets/
+.env
+.env.*
+*.pem
+*.key
+*.jks
+*.keystore
+*.p12
+*.pfx
+
+# 앱 산출물·기록
+*.apk
+*.aab
+*.log
+*.jsonl
+*.db
+*.sqlite
+*.sqlite3
+EBWebView/
+.playwright*/
+
+# 압축 산출물 (릴리스에만 올림)
+*.zip
+*.7z
