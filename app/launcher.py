@@ -33,6 +33,8 @@ from app.shell import WinApi  # noqa: E402
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 NEW_GROUP = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
 ORDER = ["brain", "ear", "tts", "body", "pet"]
+# 0.1.8 까지 설치 때 설정에 적던 옷 목록 주소(본 저장소 릴리스의 packs.json) — 이 값이면 펫 기본(옷 저장소 outfits.json)을 씀
+OLD_PACK_CATALOGS = ("https://github.com/sinhs0301-prog/kimbiseo/releases/latest/download/packs.json",)
 KO = {"brain": "두뇌", "ear": "귀(받아쓰기)", "tts": "목소리", "body": "본체", "pet": "펫"}
 WHAT = {"목소리": "tts", "귀": "ear"}
 BRAIN_GPU_NEED_MIB = 3800        # Gemma 4 E4B Q4 문맥 8K 그래픽 몫 약 3.5GB(3단계 실측) + 여유
@@ -270,8 +272,9 @@ class Launcher:
             cmd = [exe, folder, "--profile=" + os.path.join(self.data, "pet")]
             if pc.get("옷_받기") is True:
                 cmd.append("--auto-pack")
-            if pc.get("옷목록_주소"):
-                cmd.append("--pack-source=" + str(pc["옷목록_주소"]))
+            src = str(pc.get("옷목록_주소") or "").strip()
+            if src and src not in OLD_PACK_CATALOGS:   # 옛 판 기본 주소는 넘기지 않음 → 펫 config.json 의 새 옷 목록(+ 옛 주소는 예비)
+                cmd.append("--pack-source=" + src)
             return cmd, folder, {}, None
         raise KeyError(k)
 

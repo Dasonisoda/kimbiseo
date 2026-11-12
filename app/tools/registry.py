@@ -24,7 +24,7 @@ from ..core import config as C
 from ..core import safe_args
 
 TOOLS_DIR = os.path.dirname(os.path.abspath(__file__))
-WEB_KINDS = {"web_search": "web", "read_page": "web", "get_weather": "weather", "pc_action": "pc"}
+WEB_KINDS = {"web_search": "web", "read_page": "web", "get_weather": "weather", "pc_action": "pc", "type_text": "pc"}
 CAPS = {"weather": 2, "pc": 3, "memory": 3, "other": 4}
 
 
@@ -71,7 +71,7 @@ def load_packs(cfg):
             if h is None:
                 logger.warning(f"도구 {name} 의 처리 함수가 없어 뺌")
                 continue
-            if name == "pc_action" and not ((tc.get("컴퓨터조작") or {}).get("켜기", True)):
+            if name in ("pc_action", "type_text") and not ((tc.get("컴퓨터조작") or {}).get("켜기", True)):
                 continue
             f = json.loads(C.fill(cfg, json.dumps(f, ensure_ascii=False)))
             specs.append({"type": "function", "function": f})
@@ -166,6 +166,17 @@ def register(llm, specs, handlers, ctx):
     pre_wait = float(tc.get("먼저할말_기다림_초", 1.0))
     guard = Guard(st, cfg)
     bools = {s["function"]["name"]: _bool_keys(s) for s in specs}
+    if hasattr(llm, "tool_first"):   # 두뇌가 글로 쓴 호출의 이름 없는 인자 하나(calc(32000+14000))를 넣을 칸: 필수 첫 칸 → 없으면 첫 칸
+        first = {}
+        for s in specs:
+            f = s["function"]
+            p = f.get("parameters") or {}
+            k = (p.get("required") or list((p.get("properties") or {}).keys()) or [None])[0]
+            if k:
+                first[f["name"]] = k
+        llm.tool_first = first
+    if hasattr(llm, "tool_specs"):   # 구독 클로드 두뇌: 같은 도구 정의를 MCP 로 보여 줌
+        llm.tool_specs = list(specs)
 
     def make(name, handler):
         async def run(params):
@@ -198,7 +209,8 @@ def register(llm, specs, handlers, ctx):
                 done, _ = await asyncio.wait({task}, timeout=pre_wait)
                 if not done and st.pre_key != params.llm.cur_user_key:
                     st.pre_key = params.llm.cur_user_key
-                    await params.llm.push_frame(TTSSpeakFrame(random.choice(list(words))))
+                    # 문맥에 안 넣음 — 도구 결과 뒤에 '날씨 확인해 볼게요'가 비서 말로 남으면 다음 답이 그 말투를 따라 함
+                    await params.llm.push_frame(TTSSpeakFrame(random.choice(list(words)), append_to_context=False))
             try:
                 r = await task
             except Exception as ex:  # noqa: BLE001

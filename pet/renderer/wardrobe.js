@@ -1,4 +1,4 @@
-/* 옷 관리 창: 내 옷(미리보기·입기·지우기 — "정말 지울까요?") · 옷 받기(옷 목록 packs.json → 받기, 준비 중인 옷은 보여만 줌) · 파일로 옷 추가 · 서명 없는 꾸러미 경고 */
+/* 옷 관리 창: 내 옷(미리보기·입기·지우기 — "정말 지울까요?") · 옷 더 받기(옷 저장소 목록 outfits.json → 고른 옷만 받기·설명·미리보기, 준비 중인 옷은 보여만 줌) · 파일로 옷 추가 · 서명 없는 꾸러미 경고 */
 (function () {
   'use strict';
   const api = window.petApi;
@@ -23,7 +23,7 @@
   function renderMine() {
     const L = $('list'); L.textContent = '';
     const list = (st && st.packs) || [];
-    if (!list.length) { L.appendChild(el('div', 'empty', ['넣은 옷이 없어요.', el('br'), '「옷 받기」나 「파일로 옷 추가」로 넣어 주세요.'])); return; }
+    if (!list.length) { L.appendChild(el('div', 'empty', ['넣은 옷이 없어요.', el('br'), '「옷 더 받기」나 「파일로 옷 추가」로 넣어 주세요.'])); return; }
     const last = list.length <= 1;
     for (const p of list) {
       const worn = st.worn === p.id;
@@ -65,6 +65,7 @@
     }
     if (!remote) { L.appendChild(el('div', 'empty', ['옷 목록을 받는 중…'])); return; }
     if (!remote.length) { L.appendChild(el('div', 'empty', ['받을 수 있는 옷이 없어요.'])); return; }
+    L.appendChild(el('div', 'note', ['입고 싶은 옷만 골라 받아요(옷 하나가 크니까요). 새 옷이 나오면 이 목록에 생겨요.']));
     for (const p of remote) {
       const b = busy['get:' + p.key];
       const label = p.soon ? '준비 중' : b ? '받는 중' : p.installed ? (p.sameVersion ? '넣음' : '이 판 받기') : '받기';

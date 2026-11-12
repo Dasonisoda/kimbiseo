@@ -387,6 +387,27 @@ def make_app():
             except Exception as ex:  # noqa: BLE001
                 logger.warning(f"대화 끝 정리 실패: {ex.__class__.__name__}")
 
+    # ---------------------------------------------------------------- 구독 클로드 두뇌용 김비서 도구(MCP) — core/cli_mcp.py
+    from .core import cli_mcp
+
+    @app.post(cli_mcp.PATH)
+    async def mcp_post(request: Request):
+        try:
+            body = await request.json()
+        except ValueError:
+            return JSONResponse({"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": "parse error"}}, status_code=400)
+        code, out = await cli_mcp.handle(body, request.headers.get("authorization"))
+        return Response(status_code=code) if out is None else JSONResponse(out, status_code=code)
+
+    @app.get(cli_mcp.PATH)
+    async def mcp_get():
+        return Response(status_code=405)   # 서버가 먼저 보내는 알림 통로(SSE)는 안 씀
+
+    @app.delete(cli_mcp.PATH)
+    async def mcp_delete():
+        return Response(status_code=405)
+    cli_mcp.PORT = port
+
     @app.post("/api/offer")
     async def offer(request: SmallWebRTCRequest, background_tasks: BackgroundTasks):
         if not request.pc_id:

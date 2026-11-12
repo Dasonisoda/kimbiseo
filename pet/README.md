@@ -11,8 +11,8 @@ npm install            # electron 만 받음(개발용)
 npx electron .
 ```
 
-- 옷이 하나도 없으면 "옷이 아직 없어요" 안내가 뜹니다. 누르면 **옷 받기** 창이 열립니다.
-- 오른쪽 클릭 메뉴: 옷 고르기 · 옷 받기 · 파일로 옷 추가 · 크기 · (춤 노래를 켠 판만) 춤 노래 크기 · 항상 위에 두기 · 끝내기
+- 옷이 하나도 없으면 "옷이 아직 없어요" 안내가 뜹니다. 누르면 **옷 더 받기** 창이 열립니다.
+- 오른쪽 클릭 메뉴: 옷 고르기 · 옷 더 받기 · 파일로 옷 추가 · 크기 · (춤 노래를 켠 판만) 춤 노래 크기 · 항상 위에 두기 · 끝내기
 - 사용자 자료(설정·받은 옷·로그)는 `%APPDATA%\KimBiseo\pet` 에 둡니다(`--profile=<폴더>` 로 바꿀 수 있음).
 
 ### 켤 때 줄 수 있는 것
@@ -20,7 +20,7 @@ npx electron .
 | 옵션 | 뜻 |
 |---|---|
 | `--profile=<폴더>` | 사용자 자료 폴더를 바꿈 |
-| `--pack-source=<주소>` | 옷 목록(packs.json) 주소를 이번에만 바꿈 |
+| `--pack-source=<주소>` | 옷 목록(outfits.json 또는 옛 packs.json) 주소를 이번에만 바꿈 |
 | `--add-pack=<파일>` | 옷 꾸러미 파일을 넣음(파일 두 번 누르기와 같음) |
 | `--assoc` | `.hipcpet` 파일 연결을 이 펫으로(현재 사용자만, 켤 때만) |
 | `--auto-pack` / `--no-auto-pack` | 옷이 없을 때 기본 옷을 저절로 받기 켬/끔(기본 끔) |
@@ -30,13 +30,14 @@ npx electron .
 
 | 칸 | 기본값 | 뜻 |
 |---|---|---|
-| `packs_catalog` | 빈칸 | 옷 목록(packs.json) 주소. 비어 있으면 "파일로 옷 추가"만 됩니다 |
-| `allowed_hosts` | GitHub 3곳 + 옷 받는 서버 | 옷을 받아도 되는 https 호스트. 이 PC(127.0.0.1·localhost)는 늘 허용 |
+| `packs_catalog` | 옷 저장소 `outfits.json` | 옷 목록 주소(공개판 = [kimbiseo-outfits](https://github.com/sinhs0301-prog/kimbiseo-outfits) 의 `outfits.json`). 비어 있으면 "파일로 옷 추가"만 됩니다 |
+| `packs_catalog_backup` | 본 저장소 최신 릴리스 `packs.json` | 첫 주소가 안 될 때 쓰는 예비 목록(같은 옷을 가리키는 옛 모양) |
+| `allowed_hosts` | GitHub 4곳 | 옷 목록·미리보기·옷을 받아도 되는 https 호스트(github.com · raw.githubusercontent.com · 릴리스 파일 서버 2곳). 이 PC(127.0.0.1·localhost)는 늘 허용 |
 | `voice_url` | `http://127.0.0.1:8871` | 김비서 목소리 서버(펫 메뉴의 '말하기 시험'용, 이 PC 주소만) |
 | `port` | `17961` | 펫 신호 입구. 쓰는 중이면 +1~+9, 실제 번호는 사용자 자료 폴더의 `speak_port.txt` |
 | `default_pack` | `kimbiseo_f` | 기본 옷 id |
 
-옷 목록 주소는 `--pack-source` → 사용자 설정(`packSource`) → `config.json` 의 `packs_catalog` 순서로 먼저 있는 것을 씁니다.
+옷 목록 주소는 `--pack-source` → 사용자 설정(`packSource`) → `config.json` 의 `packs_catalog` 순서로 먼저 있는 것을 씁니다. 그 주소가 안 되면 `packs_catalog_backup` 을 봅니다.
 
 ## 신호 입구 (127.0.0.1 만)
 
@@ -90,23 +91,29 @@ music/*.mp3      (노래 포함판만)
 
 노래 없는 판으로 바꾸면 그 옷의 노래는 함께 사라집니다(사용자 폴더로 복사해 두지 않음).
 
-## 옷 목록 (packs.json)
+## 옷 목록 (outfits.json — 옷 저장소)
+
+옷 꾸러미는 프로그램에 들어 있지 않고, 따로 둔 **옷 저장소** [sinhs0301-prog/kimbiseo-outfits](https://github.com/sinhs0301-prog/kimbiseo-outfits) 에 있습니다.
+저장소에는 목록 파일 `outfits.json` 과 미리보기 그림만 있고, 꾸러미 파일(.hipcpet)은 그 저장소의 릴리스(옷마다 하나)에 붙어 있습니다.
+펫 메뉴 **옷 더 받기** 는 이 목록을 읽어 미리보기를 보여 주고, 고른 옷만 받아 sha256·서명을 확인한 뒤 넣습니다.
 
 ```json
 {
-  "format": "kimbiseo-packs/1",
-  "packs": [
-    {"id": "kimbiseo_f", "name": "김비서(여)", "version": "…", "body": "", "gender": "여성",
-     "size": 170181796, "sha256": "…", "signed": true, "url": "kimbiseo_f_….hipcpet",
-     "preview": "kimbiseo_f_….preview.png", "default": true, "songs": true, "note": "…"},
-    {"id": "kimbiseo_m", "name": "김비서(남)", "gender": "남성", "soon": true, "note": "준비 중이에요"}
+  "format": "kimbiseo-outfits/1",
+  "outfits": [
+    {"id": "kimbiseo_f", "name": "김비서(여)", "version": "…", "body": "7.5등신", "gender": "여성",
+     "description": "기본 옷 …", "size": 169125507, "sha256": "…", "signed": true, "sign_key": "kimbiseo-pack-1",
+     "url": "https://github.com/sinhs0301-prog/kimbiseo-outfits/releases/download/<태그>/<꾸러미>.hipcpet",
+     "preview": "previews/<그림>.png", "default": true, "songs": false},
+    {"id": "kimbiseo_m", "name": "김비서(남)", "gender": "남성", "soon": true, "description": "준비 중이에요"}
   ]
 }
 ```
 
 - `url`·`preview` 는 목록 주소 기준 상대 주소도 됩니다. https + `allowed_hosts` 만 받고, 넘겨주기(redirect)도 매번 다시 봅니다(최대 5번).
-- 받은 파일의 sha256 이 목록과 다르거나, 꾸러미 id 가 목록의 id 와 다르면 넣지 않습니다.
-- `soon: true` 는 목록에 "준비 중"으로만 보입니다.
+- 받은 파일의 sha256 이 목록과 다르거나, 꾸러미 id 가 목록의 id 와 다르면 넣지 않습니다. `signed: true` 인데 정품 서명이 없거나 틀리면 넣지 않습니다.
+- `soon: true` 는 목록에 "준비 중"으로만 보입니다. 목록에 연결이 안 되면 예비 주소를 보고, 그것도 안 되면 "다시 보기" 단추만 보입니다(넣은 옷은 그대로).
+- 옛 모양 `{"format": "kimbiseo-packs/1", "packs": [ … ]}`(0.1.8 까지의 packs.json, 설명 칸 이름 `note`)도 그대로 읽습니다.
 
 ## 꾸러미 만들기 (`tools/`)
 

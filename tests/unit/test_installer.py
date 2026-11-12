@@ -152,6 +152,9 @@ def test_manifests():
     pc = json.load(open(os.path.join(ROOT, "pet", "config.json"), encoding="utf-8"))
     host = ic["packs_catalog"].split("/")[2] if ic["packs_catalog"] else ""
     check("옷 목록 주소 = https 이고 펫 허용 호스트 안", (not host) or (ic["packs_catalog"].startswith("https://") and host in pc["allowed_hosts"]))
+    check("옷 목록 = 옷 저장소 outfits.json · 예비 = 옛 packs.json(둘 다 허용 호스트)", ic["packs_catalog"] == pc["packs_catalog"]
+          and ic["packs_catalog"].endswith("/kimbiseo-outfits/main/outfits.json") and pc["packs_catalog_backup"].endswith("/packs.json")
+          and all(u.split("/")[2] in pc["allowed_hosts"] for u in (pc["packs_catalog"], pc["packs_catalog_backup"])))
 
 
 def test_gemma_admin():
@@ -264,6 +267,14 @@ def test_launcher_spec():
         cmd, _, _, skip = la.spec("pet")
         check("실행기: 펫 명령(옷 받기 동의 → --auto-pack, 옷 목록 주소)", skip is None and "--auto-pack" in cmd
               and any(x.startswith("--pack-source=https://") for x in cmd) and any(x.startswith("--profile=") for x in cmd))
+        st["펫"]["옷목록_주소"] = L.OLD_PACK_CATALOGS[0]
+        json.dump(st, open(sp, "w", encoding="utf-8"), ensure_ascii=False)
+        la.reload()
+        cmd, _, _, _ = la.spec("pet")
+        check("실행기: 0.1.8 까지의 옛 옷 목록 주소는 안 넘김(펫 기본 = 옷 저장소 outfits.json)", not any(x.startswith("--pack-source=") for x in cmd))
+        st["펫"]["옷목록_주소"] = "https://example.org/x/packs.json"
+        json.dump(st, open(sp, "w", encoding="utf-8"), ensure_ascii=False)
+        la.reload()
         cmd, _, _, _ = la.spec("body")
         check("실행기: 본체에 --parent_pid", "--parent_pid" in cmd and str(os.getpid()) in cmd)
         cmd, _, _, _ = la.spec("tts")

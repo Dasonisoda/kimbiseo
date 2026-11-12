@@ -1,10 +1,10 @@
 'use strict';
 /* 김비서 펫 — 윈도우 바탕화면 펫(Electron)
    - 투명·테두리 없는 창, 항상 위, 캐릭터 밖은 클릭이 아래 창으로 통과(그림의 픽셀 알파로 판정), 끌어서 옮기기, 오른쪽 클릭 = 한국어 메뉴
-   - 옷 = 옷 꾸러미(.hipcpet). 프로그램 안에는 옷이 없음: 옷 목록(packs.json)에서 받거나 파일로 넣음(<프로필>\옷\<id>\)
+   - 옷 = 옷 꾸러미(.hipcpet). 프로그램 안에는 옷이 없음: 옷 목록(outfits.json — 옷 저장소)에서 고른 것만 받거나 파일로 넣음(<프로필>\옷\<id>\)
    - 김비서 본체가 표정·입·말풍선·동작 신호를 보냄: HTTP 입구 127.0.0.1:17961(쓰는 중이면 +1~+9, 실제 번호는 프로필 speak_port.txt)
    - 말하기 시험(메뉴)은 김비서 목소리 서버(config.json voice_url, 본체가 켬)가 있으면 그것, 없으면 윈도우 기본 음성
-   실행 인자: --profile=<폴더>(설정·옷·로그를 그 폴더에) · --pack-source=<packs.json 주소> · --add-pack=<파일> · --assoc(.hipcpet 파일 연결)
+   실행 인자: --profile=<폴더>(설정·옷·로그를 그 폴더에) · --pack-source=<옷 목록 주소> · --add-pack=<파일> · --assoc(.hipcpet 파일 연결)
              --auto-pack(옷이 없으면 기본 옷 저절로 받기) · --draw=canvas|video · --gpu-unblock
              --virtual-screen=x,y,너비,높이(시험용: 진짜 화면 밖 좌표 → 창은 그려지지만 화면엔 안 보임, 가짜 커서, 소리 끔, 알림 영역 아이콘 없음) */
 const { app, BrowserWindow, ipcMain, screen, Tray, Menu, nativeImage } = require('electron');
@@ -26,7 +26,7 @@ const addPackArgs = argv => argv.filter(a => a.startsWith('--add-pack=')).map(a 
 
 // 프로그램 설정(config.json): 옷 목록 주소·받아도 되는 호스트·목소리 서버 주소·포트
 const CONFIG = (() => {
-  const d = { packs_catalog: '', packs_catalog_backup: '', allowed_hosts: ['github.com', 'objects.githubusercontent.com', 'release-assets.githubusercontent.com'],
+  const d = { packs_catalog: '', packs_catalog_backup: '', allowed_hosts: ['github.com', 'raw.githubusercontent.com', 'objects.githubusercontent.com', 'release-assets.githubusercontent.com'],
     voice_url: 'http://127.0.0.1:8871', port: 17961, default_pack: 'kimbiseo_f', dance_music: true };
   try { return { ...d, ...JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf8')) }; } catch (e) { return d; }
 })();
@@ -61,7 +61,7 @@ try { S = { ...DEFAULTS, ...JSON.parse(fs.readFileSync(SETTINGS, 'utf8')) }; } c
 if (!SIZES[S.size]) S.size = DEFAULTS.size;
 if (!MUSIC_LEVELS.includes(S.musicVolume)) S.musicVolume = '보통';
 const PACK_SOURCE = String(argVal('pack-source') || S.packSource || CONFIG.packs_catalog || '').trim();
-const PACK_BACKUP = String(CONFIG.packs_catalog_backup || '').trim();   // 첫 주소가 안 될 때만(config.json 에 넣었을 때 — 기본은 없음)
+const PACK_BACKUP = String(CONFIG.packs_catalog_backup || '').trim();   // 첫 주소가 안 될 때만(공개판 = 본 저장소 최신 릴리스의 옛 packs.json)
 const ALLOWED = (Array.isArray(CONFIG.allowed_hosts) ? CONFIG.allowed_hosts : []).map(h => String(h).toLowerCase());
 const ASSOC = process.argv.includes('--assoc') || S.assoc === true;
 let AUTO_PACK = !process.argv.includes('--no-auto-pack') && (process.argv.includes('--auto-pack') || S.autoPack === true);   // 본체 처음 화면에서 동의하면 /packs/auto 로도 켬
@@ -308,7 +308,8 @@ function pick(type, value, temp) {
     S.onTop = !!value;
     if (pet && !pet.isDestroyed()) pet.setAlwaysOnTop(S.onTop, 'floating');
     saveSettings();
-  } else if (type === 'speak-test') { hideMenu(); speak(TEST_LINE, 0, '기쁨', false).catch(e => log('말하기 시험 실패 ' + e.message)); }
+  } else if (type === 'dance') { hideMenu(); if (hasOutfit()) petSend('motion', { name: 'dance' }); }   // 메뉴 '춤 추기' — 입은 옷의 기본 춤 가운데 하나
+  else if (type === 'speak-test') { hideMenu(); speak(TEST_LINE, 0, '기쁨', false).catch(e => log('말하기 시험 실패 ' + e.message)); }
   else if (type === 'wardrobe') { hideMenu(); openWardrobe(value === 'get' ? 'get' : 'mine'); }
   else if (type === 'pack-file') { hideMenu(); addPackByDialog(); }
   else if (type === 'home') { const sz = petSize(), p = defaultPos(sz); setPetBounds(p.x, p.y, sz); S.x = p.x; S.y = p.y; saveSettings(); }
@@ -413,7 +414,7 @@ function updateTray() {
     { label: '메뉴 열기', click: () => openMenu(null, false) },
     { type: 'separator' },
     { label: '옷 고르기', enabled: PACKS.length > 0, submenu: PACKS.length ? PACKS.map(p => ({ label: p.name, type: 'radio', checked: S.skin === p.id, click: () => pick('skin', p.id) })) : [{ label: '(옷 없음)', enabled: false }] },
-    { label: '옷 관리·옷 받기', click: () => openWardrobe('mine') },
+    { label: '옷 관리·옷 더 받기', click: () => openWardrobe('mine') },
     { label: '파일로 옷 추가', click: () => addPackByDialog() },
     { label: '크기', submenu: Object.keys(SIZES).map(k => ({ label: k, type: 'radio', checked: S.size === k, click: () => pick('size', k) })) },
     ...(DANCE_MUSIC ? [{ label: '춤 노래 크기', submenu: MUSIC_LEVELS.map(k => ({ label: k, type: 'radio', checked: S.musicVolume === k, click: () => pick('music', k) })) }] : []),
@@ -543,7 +544,7 @@ ipcMain.on('menu-height', (e, h) => {
   menu.setBounds({ x: menuState.x, y: menuState.y, width: menuState.w, height: nh });
 });
 
-// ---------------------------------------------------------------- 옷 관리·옷 받기 창, 파일로 추가·끌어 놓기·두 번 누르기
+// ---------------------------------------------------------------- 옷 관리·옷 더 받기 창, 파일로 추가·끌어 놓기·두 번 누르기
 let wardrobe = null, wardTab = 'mine';
 const wardSend = (ch, d) => { if (wardrobe && !wardrobe.isDestroyed()) wardrobe.webContents.send(ch, d); };
 const fromWard = e => wardrobe && e.sender === wardrobe.webContents;
@@ -651,24 +652,30 @@ async function deletePack(id) {
   } finally { deleting = false; }
 }
 
-// ---------------------------------------------------------------- 옷 받기: 옷 목록(packs.json) → 받기
-// 목록 모양: { "format": "kimbiseo-packs/1", "packs": [ { id, name, version, body, gender, size, sha256, signed, url, preview, default, songs, soon } ] }
+// ---------------------------------------------------------------- 옷 더 받기: 옷 목록(outfits.json · 옛 packs.json) → 고른 옷만 받기
+// 목록 모양: { "format": "kimbiseo-outfits/1", "outfits": [ { id, name, version, body, gender, description, size, sha256, signed, url, preview, default, songs, soon } ] }
+//   옛 모양 { "format": "kimbiseo-packs/1", "packs": [ … note … ] } 도 그대로 읽음(옛 판 설정·예비 주소).
 //   url·preview 는 목록 주소 기준 상대 주소도 됨. soon = 준비 중(받기 단추 없이 보여만 줌). 미리보기는 펫이 받아 data: 로(창은 바깥 주소를 직접 안 부름)
 const str = (v, n) => String(v == null ? '' : v).slice(0, n);
+function catalogItems(r) {   // 두 모양 다 → 항목 배열(모르는 모양 = null)
+  if (r && r.format === 'kimbiseo-outfits/1' && Array.isArray(r.outfits)) return r.outfits;
+  if (r && r.format === 'kimbiseo-packs/1' && Array.isArray(r.packs)) return r.packs;
+  return null;
+}
 async function remoteList() {
   if (!PACK_SOURCE) throw new packs.PackError('옷 목록 주소가 아직 정해지지 않았어요. 「파일로 옷 추가」로 넣어 주세요.', 'nosource');
   let base = null, r = null, lastErr = null;
   for (const src of [PACK_SOURCE, PACK_BACKUP].filter((x, i, a) => x && a.indexOf(x) === i)) {
     try {
       base = packs.checkUrl(src, ALLOWED);
-      r = await packs.getJson(base, ALLOWED);
-      if (r && r.format === 'kimbiseo-packs/1' && Array.isArray(r.packs)) break;
-      r = null; lastErr = new packs.PackError('옷 목록 모양이 달라요', 'net');
+      r = catalogItems(await packs.getJson(base, ALLOWED));
+      if (r) break;
+      lastErr = new packs.PackError('옷 목록 모양이 달라요', 'net');
     } catch (e) { r = null; lastErr = e; log('옷 목록 못 받음(' + String(src).slice(0, 80) + '): ' + (e && e.message)); }
   }
   if (!r) throw lastErr || new packs.PackError('옷 목록을 받지 못했어요', 'net');
   const out = [];
-  for (const p of r.packs.slice(0, 50)) {
+  for (const p of r.slice(0, 50)) {
     if (!p || !packs.ID_RE.test(String(p.id))) continue;
     const soon = p.soon === true;
     let url = null, prev = null;
@@ -687,7 +694,7 @@ async function remoteList() {
     const mine = packOf(String(p.id));
     out.push({ key: String(p.id) + '@' + str(p.version, 40), id: String(p.id), name: str(p.name || p.id, 60), version: str(p.version, 40), size: +p.size || 0,
       sha256: sha, url, signed: p.signed === true, body: str(p.body, 30), gender: str(p.gender, 10), def: p.default === true, songs: p.songs === true, soon,
-      note: str(p.note, 120), img, installed: !!mine, sameVersion: !!mine && mine.version === str(p.version, 40) });
+      note: str(p.description || p.note, 160), img, installed: !!mine, sameVersion: !!mine && mine.version === str(p.version, 40) });
   }
   return out;
 }

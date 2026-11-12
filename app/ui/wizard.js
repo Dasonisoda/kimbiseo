@@ -158,7 +158,7 @@ const Wizard = {
           this.d.펫.옷, (v) => { this.d.펫.옷 = v; }, {wide: true, idp: "wz-pet"}));
       const p = ch["펫"].find((x) => x.id === this.d.펫.옷);
       info.replaceChildren();
-      if (p && !p["준비"]) info.appendChild(notice("warn", "이 캐릭터는 아직 준비 중이에요", "준비되면 옷 받기에서 받을 수 있어요. 그 전까지는 준비된 기본 펫이 화면에 나와요."));
+      if (p && !p["준비"]) info.appendChild(notice("warn", "이 캐릭터는 아직 준비 중이에요", "준비되면 펫 메뉴의 '옷 더 받기'에서 받을 수 있어요. 그 전까지는 준비된 기본 펫이 화면에 나와요."));
       const vRec = (ch["성별_추천"][this.d.펫.성별] || {})["목소리"];
       const vInfo = ch["목소리"].find((x) => x.id === vRec);
       if (vInfo && !vInfo["준비"]) info.appendChild(notice("warn", "어울리는 목소리도 준비 중이에요", `준비되기 전까지는 '${(ch["목소리"].find((x) => x["준비"]) || {})["이름"] || "기본 목소리"}'로 말해요.`));
@@ -178,7 +178,7 @@ const Wizard = {
     const src = get(K.cfg, "펫.옷목록_주소", "");
     b.append(h("p", {class: "big-q", text: "펫 옷을 지금 받을까요?"}),
       choiceGroup([{값: true, 이름: "받을게요", 설명: "기본 옷(김비서 — 춤은 소리 없이) 약 170MB 를 인터넷에서 받아요"},
-        {값: false, 이름: "나중에", 설명: "펫 메뉴의 '옷 받기'에서 언제든 받을 수 있어요"}],
+        {값: false, 이름: "나중에", 설명: "펫 메뉴의 '옷 더 받기'에서 언제든 받을 수 있어요"}],
       this.d.펫.옷_받기, (v) => { this.d.펫.옷_받기 = v; }, {wide: true, idp: "wz-pack"}),
       src ? h("p", {class: "hint", text: "받는 곳: " + src}) : notice("warn", "옷 받는 곳이 아직 정해지지 않았어요", "'받을게요'를 골라 두면 받는 곳이 정해진 뒤 펫이 저절로 받아요. 옷 파일이 있으면 펫 메뉴에서 '파일로 옷 추가'로 넣을 수 있어요."));
     this.check = () => {

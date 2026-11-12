@@ -80,7 +80,9 @@ class Session:
         turns.WIDE.update(dict(dc.get("말끝_넓게") or {}))
         specs, handlers = load_packs(cfg)
         self.cli = str(cfg["두뇌"].get("방식") or "") in CLI_KINDS
-        if self.cli:   # 구독 두뇌는 대화 전용(도구·파일 권한 끔) — 도구 정의·안내를 넣지 않음
+        if self.cli and not cfg["두뇌"].get("구독_도구", True):
+            # 구독 두뇌는 그 프로그램 자체의 도구·파일 권한은 늘 끔. 김비서 도구(날씨·계산·기억 등)는 글 약속
+            # (<<도구 {인자}>> 한 줄 → 본체가 실행 → 결과를 다음 차례로)으로 붙인다 — 두뇌.구독_도구 = false 면 대화 전용
             specs, handlers = [], {}
         self.specs = specs
         names = [s["function"]["name"] for s in specs]
@@ -140,7 +142,7 @@ class Session:
             if st.pet is not None:
                 st.pet.names = [st.names.name] + [a for a in C.names(cfg)[1]]
             done.append("깨우는 이름")
-        if self.context is not None and keys & {"비서.이름", "비서.말투", "사용자.호칭", "사용자.기본장소"}:
+        if self.context is not None and keys & {"비서.이름", "비서.말투", "사용자.호칭", "사용자.기본장소", "화면.얼굴"}:
             # 지시문(자기소개·호칭)을 새로 — 앞부분이 바뀌므로 두뇌 캐시는 한 번 다시 읽음(캐시 가드는 공통 앞부분만 허용)
             msgs = list(self.context.messages)
             if msgs and isinstance(msgs[0], dict) and msgs[0].get("role") == "system":
@@ -237,7 +239,8 @@ class Session:
         st.event("status", state="듣는 중")
         if self.cfg["대화"].get("연결인사", True) and self.opts.get("greeting", True):
             text = C.fill(self.cfg, (self.cfg.get("비서") or {}).get("인사") or "네, {이름}입니다. 말씀하세요.")
-            await self.worker.queue_frame(TTSSpeakFrame(text))
+            # 인사는 두뇌 문맥에 넣지 않음 — 작은 두뇌(Gemma)가 첫 차례에 인사 말투를 따라 하며 도구 없이 날씨를 지어내는 일이 늘었음(17단계 실측)
+            await self.worker.queue_frame(TTSSpeakFrame(text, append_to_context=False))
         st.event("wake", on=st.wake)
 
     # ---- 글 입력

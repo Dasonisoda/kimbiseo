@@ -28,7 +28,9 @@ _MOTION_KW = [
     ("stand", r"일어나|일어서|일어날래|그만 앉아"),
     ("sit", r"앉아(?!서|도|야)|앉으세요|앉을래|앉으렴"),
     ("lie", r"누워|누울래|눕자|드러누워|누우렴"),
-    ("dance", r"춤\s*(을|좀|이나|도|한\s*번)?\s*(좀\s*)?(춰|추자|추어|출래)|댄스|춤\s*보여"),
+    # '춤 좀 춰 줘'·'춤 한 번 보여 줘'·'춤춰'·'춤 춰 볼래?'·'댄스 타임'·'한 곡 춰 줘' (춤과 동사 사이에 낱말 둘까지)
+    ("dance", r"(춤|댄스)\s*(?:[가-힣]{1,4}\s*){0,2}?(춰|추자|추어|추세요|출래|출\s*수|춥시다|보여|해\s*줘|해\s*봐|타임|부탁)|"
+              r"(한\s*곡|신나게|한번|한\s*번)\s*춰|댄스|춤\s*$"),
     ("heart_big", r"큰\s*하트|머리\s*위\s*하트"),
     ("heart_cheek", r"볼\s*하트"),
     ("heart_hand", r"손\s*하트|하트"),
@@ -48,17 +50,34 @@ _REPLY_OK = {"stand", "sit", "lie", "dance", "heart_big", "heart_cheek", "heart_
 BUSY = ("생각 중", "도구 사용 중", "컴퓨터 조작 중")
 
 
+_NOT_DANCE = re.compile(r"추지\s*마|춤\s*(은|좀)?\s*그만|그만\s*(춰|추)|안\s*춰|멈춰|춤\s*(이|은)\s*(뭐|무슨)|춤\s*(얘기|이야기|영상|노래|장르|학원|대회)")
+
+
 def motion_for(text, names):
     t = re.sub(r"\s+", " ", str(text or "")).strip()
     if not t:
         return None
     for name, pat in _MOTION_KW:
         if re.search(pat, t):
+            if name == "dance" and _NOT_DANCE.search(t):
+                continue
             return name
     called = any(n and n.replace(" ", "") in t.replace(" ", "") for n in names)
     if re.search(r"안녕|반가워|반갑|하이\b|좋은 아침|굿모닝", t) and (called or len(t) <= 12):
         return "wave"
     return None
+
+
+_LINES = {"dance": "네, 춰 볼게요!", "sit": "네, 앉을게요.", "lie": "네, 누울게요.", "stand": "네, 일어날게요.",
+          "heart_big": "하트 크게 드릴게요!", "heart_cheek": "볼 하트 할게요!", "heart_hand": "하트 드릴게요!",
+          "v_wink": "윙크 할게요!", "v_double": "양손 브이!", "v_cheek": "브이!", "clap": "짝짝짝, 박수 쳐 드릴게요!",
+          "thumbs": "최고예요!", "stretch": "으쌰, 기지개 켤게요.", "wave": "안녕하세요!"}
+
+
+def motion_line(text, names=()):
+    """몸동작 부탁(펫)이면 그 동작에 맞는 짧은 답('네, 춰 볼게요!'), 아니면 ''. 검색 동작은 제외."""
+    m = motion_for(text, names)
+    return _LINES.get(m, "") if m else ""
 
 
 def motion_for_reply(text):

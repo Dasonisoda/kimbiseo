@@ -84,7 +84,7 @@ python tools/release_check.py privatelist-selftest  # 비공개 낱말 목록이
 |---|---|
 | `pack_sign.js` | ed25519 키 만들기(`keygen`)·공개키 보기(`pubkey`)·서명(`sign`)·확인(`verify`). 비밀키는 저장소 밖에 둡니다 |
 | `pack_make.py` | 옷 꾸러미를 공개용으로 다시 묶고 서명(정해진 칸만 남김·PNG 글 묶음 지움·영어 파일 이름·노래 포함/뺌) |
-| `make_catalog.py` | 꾸러미 파일들로 옷 목록 `packs.json` 과 미리보기 그림을 만듦(`--soon` 으로 '준비 중' 옷) |
+| `make_catalog.py` | 꾸러미 파일들로 옛 모양 옷 목록 `packs.json` 과 미리보기 그림을 만듦(`--soon` 으로 '준비 중' 옷). 공개판 옷 목록은 옷 저장소(kimbiseo-outfits)의 `outfits.json` |
 
 자세한 형식은 `pet/README.md` 에 있습니다.
 

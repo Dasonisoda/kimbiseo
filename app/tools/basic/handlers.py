@@ -1,11 +1,13 @@
-# 기본 도구 10개 처리 함수 — HANDLERS = {이름: async 함수(ctx, args) → dict}
+# 기본 도구 11개 처리 함수 — HANDLERS = {이름: async 함수(ctx, args) → dict}
 #   remember·recall·forget : 이 PC 기억(core/memory)   web_search·read_page·get_weather : web.py
-#   pc_action : pc_action.py(허용목록)   speech_speed : 말 빠르기 1.0/1.2/1.4   standby : 대기(이름 부르기 모드)   calc : 안전한 계산
+#   pc_action : pc_action.py(허용목록)   type_text : type_text.py(김비서가 연 메모장에만 쓰기)
+#   speech_speed : 말 빠르기 1.0/1.2/1.4   standby : 대기(이름 부르기 모드)   calc : 안전한 계산(숫자 없는 '계산기'면 계산기 프로그램 열기)
 import ast
 import asyncio
 import importlib.util
 import operator
 import os
+import re
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -19,6 +21,7 @@ def _load(name):
 
 web = _load("web")
 pc = _load("pc_action")
+typing = _load("type_text")
 
 
 def _web_cfg(ctx):
@@ -71,7 +74,24 @@ async def pc_action(ctx, a):
     act, err = pc.from_llm(a, pcfg.get("사이트") or {}, pcfg.get("별명") or {})
     if err:
         return err
+    if act.get("action") == "open_program" and act.get("program") == "notepad":
+        # 메모장은 '우리 메모'로 연다 — 뒤이어 type_text 가 그 창에만 쓸 수 있게
+        return await asyncio.to_thread(typing.open_result, _memo_dir(ctx), bool(pcfg.get("시험_실행안함")))
     return await asyncio.to_thread(pc.run_checked, act, bool(pcfg.get("시험_실행안함")))
+
+
+# ---------------- 메모장에 쓰기
+def _memo_dir(ctx):
+    w = (ctx.cfg.get("도구") or {}).get("글쓰기") or {}
+    return typing.memo_dir(str(w.get("메모_폴더") or ""))
+
+
+async def type_text(ctx, a):
+    tc = ctx.cfg.get("도구") or {}
+    pcfg = tc.get("컴퓨터조작") or {}
+    lim = int((tc.get("글쓰기") or {}).get("최대_글자", typing.MAX_CHARS) or typing.MAX_CHARS)
+    return await asyncio.to_thread(typing.type_memo, a.get("text"), _memo_dir(ctx), bool(a.get("new_memo")),
+                                   min(lim, typing.MAX_CHARS), bool(pcfg.get("시험_실행안함")))
 
 
 # ---------------- 말 빠르기
@@ -147,7 +167,17 @@ def calc_expr(expr):
     return v
 
 
+_CALC_APP = re.compile(r"^\s*(윈도우\s*)?(계산기|calculator|calc(\.exe)?)(\s*(프로그램|앱|창))?\s*((켜|열|실행|띄워)[가-힣\s]*)?$", re.I)
+
+
 async def calc(ctx, a):
+    """숫자 계산. 작은 두뇌가 '계산기 켜 줘'를 calc(계산기) 로 부르면 → 계산기 프로그램 열기로 바꿈(숫자가 하나도 없을 때만)."""
+    ex = str(a.get("expression") or "")
+    if not re.search(r"\d", ex) and _CALC_APP.match(ex) and ((ctx.cfg.get("도구") or {}).get("컴퓨터조작") or {}).get("켜기", True):
+        r = await pc_action(ctx, {"action": "open_program", "program": "calculator"})
+        if isinstance(r, dict):
+            r = dict(r, 안내="계산기 프로그램을 켰다고 한 문장으로 답한다.")
+        return r
     try:
         v = calc_expr(a.get("expression"))
     except (ValueError, SyntaxError, ZeroDivisionError, OverflowError) as ex:
@@ -156,4 +186,4 @@ async def calc(ctx, a):
 
 
 HANDLERS = {"remember": remember, "recall": recall, "forget": forget, "web_search": web_search, "read_page": read_page,
-            "get_weather": get_weather, "pc_action": pc_action, "speech_speed": speech_speed, "standby": standby, "calc": calc}
+            "get_weather": get_weather, "pc_action": pc_action, "type_text": type_text, "speech_speed": speech_speed, "standby": standby, "calc": calc}

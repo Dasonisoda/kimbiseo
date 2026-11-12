@@ -141,7 +141,7 @@
    "type": "function",
    "function": {
     "name": "pc_action",
-    "description": "이 컴퓨터에서 웹사이트를 열거나(open_website), 검색 결과 화면을 열거나(search), 정해진 프로그램을 켠다(open_program). 허용된 것만 된다.",
+    "description": "이 컴퓨터에서 웹사이트를 열거나(open_website), 검색 결과 화면을 열거나(search), 정해진 프로그램을 켠다(open_program). '네이버에서/구글에서/유튜브에서 ~ 검색해 줘'처럼 검색할 곳을 말하면 search 로 그 검색 화면을 연다. 허용된 것만 된다.",
     "parameters": {
      "type": "object",
      "properties": {
@@ -180,11 +180,34 @@
         "explorer",
         "paint"
        ],
-       "description": "open_program: chrome=크롬, edge=엣지, notepad=메모장, calculator=계산기 프로그램, explorer=파일 탐색기, paint=그림판"
+       "description": "open_program: chrome=크롬, edge=엣지, notepad=메모장(김비서 메모 창), calculator=계산기 프로그램, explorer=파일 탐색기, paint=그림판"
       }
      },
      "required": [
       "action"
+     ]
+    }
+   }
+  },
+  {
+   "type": "function",
+   "function": {
+    "name": "type_text",
+    "description": "메모장(김비서 메모 창)에 글을 써 넣는다. 김비서가 띄운 메모 창에만 쓴다(열린 것이 없으면 새로 열어서 씀). 찾은 내용 정리·받아 적기에 쓴다. 다른 프로그램에는 쓰지 않고, 저장은 사용자가 한다.",
+    "parameters": {
+     "type": "object",
+     "properties": {
+      "text": {
+       "type": "string",
+       "description": "써 넣을 글(4000자까지, 줄바꿈 가능)"
+      },
+      "new_memo": {
+       "type": "boolean",
+       "description": "새 메모 창을 열어 쓰려면 true"
+      }
+     },
+     "required": [
+      "text"
      ]
     }
    }
@@ -231,7 +254,7 @@
    "type": "function",
    "function": {
     "name": "calc",
-    "description": "계산기. 숫자 계산(곱하기·나누기·퍼센트·합계)은 머리로 하지 말고 이 도구로 한다.",
+    "description": "숫자 계산 도구(곱하기·나누기·퍼센트·합계). 숫자 계산은 머리로 하지 말고 이 도구로 한다. '계산기 켜 줘'처럼 계산기 프로그램을 켜라는 말은 이 도구가 아니라 pc_action(open_program, calculator).",
     "parameters": {
      "type": "object",
      "properties": {

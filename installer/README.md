@@ -12,7 +12,7 @@
 | `locks/*.json` | 파이썬 부품 잠금: 이름·판·주소·sha256(본체 `app`, 음성 `voice-cuda`/`voice-cpu`). 설치는 이 주소에서 직접 받아 sha256 을 확인한 뒤 `pip --no-index --require-hashes` 로만 넣음 |
 | `requirements/*.txt` | 잠금을 만드는 원래 목록. 잠금은 `make_lock.py`(개발자 도구)로 다시 만듦 |
 | `models.json` · `get_models.py` | 모델 목록(고정 판·크기·공식 해시)과 받기(이어 받기·다시 시도·진행·받은 뒤 해시 확인·확인 기록) |
-| `install_config.json` | 설치 때 정하는 값. `packs_catalog` = 펫 옷 목록(packs.json) 주소 한 줄(https, `pet/config.json` 의 `allowed_hosts` 안) |
+| `install_config.json` | 설치 때 정하는 값. `packs_catalog` = 펫 옷 목록 주소 한 줄(공개판 = 옷 저장소 kimbiseo-outfits 의 `outfits.json`, https, `pet/config.json` 의 `allowed_hosts` 안) |
 | `updater.py` | 업데이트 바꾸기 일꾼(표준 라이브러리만). 본체가 새 판을 받아 서명·sha256 을 확인한 뒤 이 파일을 `install\update\updater_run.py` 로 복사해 띄움 → 김비서 끄기(기록된 PID 만) → `src` 만 바꿔 끼우기 → 문법·불러오기·본체 켜짐 검사 → 안 되면 예전 판으로 되돌림 → 다시 켜기. 다시 켠 뒤 실행기가 오류로 꺼져도 되돌림 |
 | `uninstall.ps1` | 지우기(시작 메뉴 '김비서 제거' · 윈도우 '앱 및 기능'). 자기 설치 폴더·아이콘·앱 목록·이 펫이 만든 파일 연결만 지우고, 대화 기억·설정은 물어봄 |
 

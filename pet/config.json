@@ -1,8 +1,10 @@
 {
- "_설명": "펫 프로그램 설정. packs_catalog = 옷 목록(packs.json) 주소(깃허브 최신 릴리스 고정 주소. 비어 있으면 '파일로 옷 추가'만 됨. 사용자 설정 packSource 나 --pack-source 가 먼저). packs_catalog_backup = (선택) 첫 주소가 안 될 때 쓰는 예비 주소 — 기본은 없음. allowed_hosts = 옷을 받아도 되는 https 호스트(GitHub 릴리스만)(이 PC 127.0.0.1·localhost 는 늘 허용). voice_url = 김비서 목소리 서버. port = 펫 신호 입구. dance_music = 춤출 때 노래 틀기(공개판 false = 춤은 추되 소리 없이 — 노래 고르기·춤노래 폴더·'춤 노래 크기' 칸 없음).",
- "packs_catalog": "https://github.com/sinhs0301-prog/kimbiseo/releases/latest/download/packs.json",
+ "_설명": "펫 프로그램 설정. packs_catalog = 옷 목록(outfits.json) 주소 — 옷 저장소(sinhs0301-prog/kimbiseo-outfits)의 목록 파일. 비어 있으면 '파일로 옷 추가'만 됨. 사용자 설정 packSource 나 --pack-source 가 먼저. packs_catalog_backup = 첫 주소가 안 될 때 쓰는 예비 주소(본 저장소 최신 릴리스의 옛 모양 packs.json — 같은 옷을 가리킴). allowed_hosts = 옷 목록·미리보기·옷을 받아도 되는 https 호스트(GitHub 만)(이 PC 127.0.0.1·localhost 는 늘 허용). voice_url = 김비서 목소리 서버. port = 펫 신호 입구. dance_music = 춤출 때 노래 틀기(공개판 false = 춤은 추되 소리 없이 — 노래 고르기·춤노래 폴더·'춤 노래 크기' 칸 없음).",
+ "packs_catalog": "https://raw.githubusercontent.com/sinhs0301-prog/kimbiseo-outfits/main/outfits.json",
+ "packs_catalog_backup": "https://github.com/sinhs0301-prog/kimbiseo/releases/latest/download/packs.json",
  "allowed_hosts": [
   "github.com",
+  "raw.githubusercontent.com",
   "objects.githubusercontent.com",
   "release-assets.githubusercontent.com"
  ],

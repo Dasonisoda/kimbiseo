@@ -1,4 +1,4 @@
-/* 오른쪽 클릭 메뉴: 옷(바로 갈아입음, 메뉴는 열린 채) · 옷 관리·옷 받기·파일로 추가 · 크기 · 춤 노래 크기 · 항상 위 · 말하기 시험 · 끝내기 */
+/* 오른쪽 클릭 메뉴: 옷(바로 갈아입음, 메뉴는 열린 채) · 옷 관리·옷 더 받기·파일로 추가 · 크기 · 춤 노래 크기 · 항상 위 · 춤 추기 · 말하기 시험 · 끝내기 */
 (function () {
   'use strict';
   const api = window.petApi;
@@ -18,7 +18,7 @@
   function render() {
     if (!S) return;
     const o = $('outfits'); o.textContent = ''; o.className = 'outfits' + (S.outfits.length === 1 ? ' one' : '');
-    if (!S.outfits.length) o.appendChild(el('div', 'empty', ['넣은 옷이 없어요 — 아래 「옷 받기」를 눌러 주세요']));
+    if (!S.outfits.length) o.appendChild(el('div', 'empty', ['넣은 옷이 없어요 — 아래 「옷 더 받기」를 눌러 주세요']));
     for (const f of S.outfits) {
       const b = el('button', 'outfit' + (S.skin === f.id ? ' on' : ''), [img(/^(file|data):/.test(f.img || '') ? f.img : 'img/icon.png'), el('span', '', [f.name + (f.songs || S.danceMusic === false ? '' : ' · 노래 없음')])]);
       b.dataset.skin = f.id;
@@ -48,6 +48,7 @@
   }
   $('x').onclick = () => pick('close');
   $('ontop').onclick = () => pick('ontop', !S.onTop);
+  $('dance').onclick = () => pick('dance');
   $('speak').onclick = () => pick('speak-test');
   $('home').onclick = () => { pick('home'); toast('화면 오른쪽 아래로 옮겼어요'); };
   $('ward').onclick = () => pick('wardrobe', 'mine');

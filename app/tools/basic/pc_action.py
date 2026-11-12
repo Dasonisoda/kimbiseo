@@ -144,7 +144,18 @@ def from_llm(args, sites=None, aliases=None):
     """두뇌가 부른 pc_action 인자를 검사해 (행동 dict, None) 또는 (None, 실패 결과) 를 돌려준다."""
     if not isinstance(args, dict):
         return None, fail("잘못된 인자", REFUSE)
+    if not args.get("action"):   # 작은 두뇌가 {"open_program": "calculator"} 처럼 동작 이름을 칸 이름으로 씀
+        for k, field in (("open_program", "program"), ("open_website", "site"), ("search", "query")):
+            if isinstance(args.get(k), str) and args.get(k).strip():
+                args = dict(args, action=k, **{field: args.get(field) or args[k]})
+                break
     act = _key(args.get("action"))
+    if act in ("openwebsite", "openurl", "website", "url") and not (args.get("site") or args.get("url")):
+        for k in ("engine", "query", "program"):   # open_website 인데 사이트 칸이 비고 engine·query 에 '유튜브'만 옴
+            v = _clean(args.get(k), 40)
+            if v and "." not in v and ":" not in v and resolve_site(v, sites, aliases)[0]:
+                args = dict(args, site=v)
+                break
     browser = _key(args.get("browser") or "default")
     browser = {"크롬": "chrome", "엣지": "edge", "기본": "default", "기본브라우저": "default"}.get(browser, browser)
     if browser not in BROWSERS:
@@ -155,6 +166,11 @@ def from_llm(args, sites=None, aliases=None):
     if act in ("openprogram", "program") and prog in ("chrome", "edge") and (site or args.get("query")):
         browser = prog
         act = "search" if (args.get("query") and not site) else "openwebsite"
+    # '유튜브 켜 줘' 를 open_program(youtube) 로 부른 경우 → 프로그램 목록에 없고 주소 사전에 있는 사이트면 사이트 열기
+    p_raw = _clean(args.get("program"), 60)
+    if act in ("openprogram", "program", "launch") and not prog and not site and p_raw             and "." not in p_raw and ":" not in p_raw:   # 사전에 있는 이름만(주소 꼴은 안 받음)
+        if resolve_site(p_raw, sites, aliases)[0]:
+            site, act = p_raw, "openwebsite"
     if act in ("openwebsite", "openurl", "website", "url"):
         url, why = resolve_site(site, sites, aliases)
         if not url:

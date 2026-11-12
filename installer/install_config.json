@@ -1,4 +1,4 @@
 {
- "_설명": "설치할 때 정하는 값. packs_catalog = 펫 옷 목록(packs.json) 주소 — 이 한 줄만 바꾸면 됨(https 만, 받는 곳은 pet/config.json allowed_hosts 안이어야 함). 비우면 옷은 '파일로 옷 추가'만. 주소는 깃허브 '최신 릴리스' 고정 주소(releases/latest/download) — 새 릴리스에 packs.json·꾸러미를 같이 올리면 따라감.",
- "packs_catalog": "https://github.com/sinhs0301-prog/kimbiseo/releases/latest/download/packs.json"
+ "_설명": "설치할 때 정하는 값. packs_catalog = 펫 옷 목록 주소 — 이 한 줄만 바꾸면 됨(https 만, 받는 곳은 pet/config.json allowed_hosts 안이어야 함). 비우면 옷은 '파일로 옷 추가'만. 공개판 = 옷 저장소(sinhs0301-prog/kimbiseo-outfits)의 outfits.json — 새 옷을 올리면 목록이 따라감.",
+ "packs_catalog": "https://raw.githubusercontent.com/sinhs0301-prog/kimbiseo-outfits/main/outfits.json"
 }
