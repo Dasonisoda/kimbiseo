@@ -89,14 +89,23 @@ def apply_barge(cfg):
 def load(settings_path=None, warn=print):
     cfg = _read(DEFAULT_FILE)
     p = user_settings_path(settings_path)
+    user = None
     if os.path.isfile(p):
         try:
-            cfg = deep_merge(cfg, _check_types(cfg, _read(p), "설정", warn))
+            user = _read(p)
+            cfg = deep_merge(cfg, _check_types(cfg, user, "설정", warn))
         except (OSError, ValueError) as ex:
             warn(f"[설정] 사용자 설정을 못 읽음 → 기본값: {ex}")
     elif settings_path:
         warn("[설정] 사용자 설정 파일이 없음 → 기본값")
     apply_barge(cfg)
+    # 목소리: 사용자 설정에 '목소리.목소리' 가 있으면 고정, 없으면 펫.성별(여/남)로 고른다.
+    #   자산이 없어 대체된 경우 warn 으로 한 줄 남긴다(화면은 settings_api 경고로도 보여 줌).
+    from .voice_choice import apply as apply_voice
+    apply_voice(cfg, user or {}, log=warn)
+    # 말투: 사용자 설정에 '비서.말투' 가 있으면 고정, 없으면 펫.성별(여: 존댓말, 남: 편한 존댓말)로 고른다.
+    from .voice_choice import apply_tone
+    apply_tone(cfg, user or {})
     cfg["_settings_file"] = p if os.path.isfile(p) else ""
     return cfg
 

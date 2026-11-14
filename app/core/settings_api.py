@@ -14,6 +14,7 @@ import httpx
 
 from . import config as C
 from . import keystore
+from . import voice_choice as V
 from .wake import name_warning
 
 CHOICES_FILE = os.path.join(C.APP, "config", "choices.json")
@@ -102,6 +103,32 @@ def get(cfg, key, default=None):
             return default
         cur = cur[p]
     return cur
+
+
+# ---------------------------------------------------------------- 성별 → 목소리
+def resolve_voice(cfg, user=None, log=None, registry=None):
+    """지금 쓸 목소리 판단(펫.성별 자동 / 사용자 목소리 고정 / 자산 없음 대체).
+    시험과 화면이 같은 함수를 쓴다. 자세한 규칙은 core/voice_choice.py."""
+    return V.resolve(cfg, user=user, log=log, registry=registry)
+
+
+def resolve_tone(cfg, user=None):
+    """지금 쓸 말투 판단(사용자 고정 / 펫.성별 자동). 시험과 화면이 같은 함수를 쓴다."""
+    return V.resolve_tone(cfg, user=user)
+
+
+def voice_warning(cfg, clean):
+    """이번 저장으로 목소리가 자산 없는 값이 되면 화면·기록에 보일 한 줄. 아니면 ""."""
+    if not ({"펫.성별", "목소리.목소리"} & set(clean)):
+        return ""
+    user = V.user_from_cfg(cfg)
+    pinned = clean["목소리.목소리"] if "목소리.목소리" in clean else V.user_voice(user)
+    if pinned:
+        target = pinned
+    else:
+        target = V.voice_for_gender(clean.get("펫.성별", (cfg.get("펫") or {}).get("성별")))
+    problem = V.asset_problem(target)
+    return f"{problem} → 기본 {V.DEFAULT_VOICE} 사용" if problem else ""
 
 
 def _clean_str(v, n, empty):
@@ -199,6 +226,9 @@ def validate(changes, cfg, voice_warn=""):
         clean["비서.별칭"] = [a for a in clean["비서.별칭"] if a != name]
     if clean.get("목소리.엔진") == "qwen" and voice_warn:
         warns.append(voice_warn)
+    w = voice_warning(cfg, clean)
+    if w:
+        warns.append(w)
     # 두뇌 방식이 바뀌면 열쇠 이름을 맞춰 둔다(GPT·클로드는 정해진 이름, 내 AI 주소는 열쇠가 있을 때만)
     if "두뇌.방식" in clean:
         kind = clean["두뇌.방식"]
@@ -238,7 +268,10 @@ def view(cfg):
     out = {k: get(cfg, k) for k in FIELDS}
     out["비서.이름"], out["비서.별칭"] = name, al
     out["열쇠"] = {n: bool(keystore.get(n, cfg)) for n in SECRET_NAMES}
-    return nest(out)
+    v = nest(out)
+    # 화면이 '성별에 맞춰 자동으로 골랐는지 / 자산이 없어 대체되는지' 를 보여 줄 수 있게.
+    v.setdefault("목소리", {})["해석"] = V.describe(cfg)
+    return v
 
 
 def save_secret(cfg, name, value):

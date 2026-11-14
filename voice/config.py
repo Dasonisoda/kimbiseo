@@ -12,6 +12,9 @@ import os
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(HERE)
+VOICES_FILE = os.path.join(HERE, "voices.json")
+DEFAULT_VOICE = "kimbiseo"
+GENDER_VOICES = {"여": "kimbiseo", "남": "kimbiseo_m"}
 
 DEFAULTS = {
     "포트": {"목소리": 8871, "귀": 8872},
@@ -20,6 +23,9 @@ DEFAULTS = {
         "모델": "%LOCALAPPDATA%/KimBiseo/models",
         "캐시": "%LOCALAPPDATA%/KimBiseo/cache",
         "로그": "%APPDATA%/KimBiseo/logs",
+    },
+    "펫": {
+        "성별": "여",               # 목소리 자동 연결: 여 → kimbiseo, 남 → kimbiseo_m (사용자 목소리 고정이 없을 때)
     },
     "모델": {
         "오프라인": True,          # 모델은 설치 때 받아 두고, 켤 때는 인터넷에 묻지 않음(HF_HUB_OFFLINE=1)
@@ -43,7 +49,9 @@ DEFAULTS = {
         "장치": "auto",            # auto | cuda | cpu
         "그래픽메모리_상한_GB": 1.8,
         "CPU_스레드": 8,
-        "목소리": "kimbiseo",       # voices.json 의 이름
+        "목소리": "kimbiseo",       # voices.json 의 이름. 사용자 설정에 이 값이 있으면 고정,
+                                     #   없으면 펫.성별 자동(여: kimbiseo, 남: kimbiseo_m)
+        "성별_목소리": {"여": "kimbiseo", "남": "kimbiseo_m"},   # voices.json 의 같은 항목이 있으면 그것을 우선
         "참고음성_폴더": "",         # 비우면 voices.json 의 폴더. 폴더 안에 참고목록.json + wav
         "윈도우_목소리": "",         # 윈도우 음성 이름 일부(비우면 한국어 음성 중 첫째)
         "발음사전": "",             # 사용자 발음 사전(tsv) — 저장소 기본 사전보다 먼저 적용
@@ -52,6 +60,71 @@ DEFAULTS = {
         "로그_글_남기기": False,
     },
 }
+
+
+def _load_voices():
+    try:
+        with open(VOICES_FILE, encoding="utf-8-sig") as f:
+            j = json.load(f)
+        return j if isinstance(j, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _user_voice(user):
+    if not isinstance(user, dict):
+        return None
+    v = (user.get("목소리") or {}).get("목소리")
+    return v if isinstance(v, str) and v.strip() else None
+
+
+def _asset_problem(name, reg):
+    entry = (reg.get("목록") or {}).get(name)
+    if not isinstance(entry, dict):
+        return f"목소리 {name} 정보 없음"
+    folder = str(entry.get("폴더") or "").strip()
+    if not folder:
+        return f"목소리 {name} 폴더 정보 없음"
+    folder = os.path.expandvars(folder)
+    folder = folder if os.path.isabs(folder) else os.path.normpath(os.path.join(REPO, folder))
+    manifest = os.path.join(folder, "참고목록.json")
+    if not os.path.isfile(manifest):
+        return f"목소리 {name} 참고음성 없음"
+    try:
+        with open(manifest, encoding="utf-8-sig") as f:
+            j = json.load(f)
+    except (OSError, ValueError):
+        return f"목소리 {name} 참고목록.json 읽기 실패"
+    base = j.get("기본") if isinstance(j.get("기본"), dict) else {}
+    wav = str(base.get("wav") or "").strip()
+    if not wav:
+        return f"목소리 {name} 참고음성 없음"
+    if not os.path.isfile(os.path.join(folder, wav)):
+        return f"목소리 {name} 참고음성 파일 없음({wav})"
+    return ""
+
+
+def resolve_voice(cfg, user=None, log=None):
+    """사용자 설정에 '목소리.목소리' 가 있으면 고정, 없으면 펫.성별 로 고른다.
+    고른 목소리의 참고음성이 없으면 기본목소리로 대체하고 한 줄 남긴다(서버가 윈도우 음성으로
+    넘어가지 않게, 기본목소리는 그대로 쓸 수 있게). 목소리 서버는 요청마다 voice 를 받으므로
+    실행 중 성별이 바뀌어도 이 값은 다음에 서버를 켤 때 반영된다."""
+    reg = _load_voices()
+    default = str(reg.get("기본목소리") or DEFAULT_VOICE)
+    pinned = _user_voice(user)
+    gender = str((cfg.get("펫") or {}).get("성별") or "여")
+    mapping = reg.get("성별_목소리") if isinstance(reg.get("성별_목소리"), dict) else None
+    if not isinstance(mapping, dict):
+        mapping = (cfg.get("목소리") or {}).get("성별_목소리")
+    if not isinstance(mapping, dict):
+        mapping = GENDER_VOICES
+    want = pinned or str(mapping.get(gender) or default)
+    problem = _asset_problem(want, reg)
+    effective = default if problem else want
+    if problem and log is not None:
+        log(f"{problem} → 기본 {default} 사용")
+    cfg.setdefault("목소리", {})["목소리"] = effective
+    return cfg
 
 
 def deep_merge(base, over):
@@ -87,13 +160,16 @@ def load(settings_path=None, warn=print):
         j = _read_json(repo_default)
         cfg = deep_merge(cfg, {k: j[k] for k in DEFAULTS if k in j})
     p = user_settings_path(settings_path)
+    user = None
     if os.path.isfile(p):
         try:
-            cfg = deep_merge(cfg, _read_json(p))
+            user = _read_json(p)
+            cfg = deep_merge(cfg, user)
         except (OSError, ValueError) as ex:
             warn(f"[설정] 사용자 설정을 못 읽음 → 기본값: {p} ({ex})")
     elif settings_path:
         warn(f"[설정] 사용자 설정 파일 없음 → 기본값: {p}")
+    cfg = resolve_voice(cfg, user or {}, log=warn)
     cfg["_settings_file"] = p if os.path.isfile(p) else ""
     return cfg
 

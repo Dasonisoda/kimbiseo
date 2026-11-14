@@ -483,12 +483,19 @@ def make_app():
         clean, errors, warns = S.validate(changes, CFG, voice_warn=warn)
         if errors:
             return JSONResponse({"ok": False, "오류": errors}, status_code=400)
+        for w in warns:
+            logger.warning(w)     # 목소리 자산 없음 대체 같은 안내를 기록에도 남김
         keys = S.changed_keys(CFG, clean)
         if keys:
+            old_tone = S.get(CFG, "비서.말투")
             if not C.save_user(CFG, S.nest({k: clean[k] for k in keys})):
                 return JSONResponse({"ok": False, "오류": {"": "설정 파일을 저장하지 못했어요"}}, status_code=500)
             mem_was = (CFG.get("기억") or {}).get("켜기", True)
             _reload()
+            # 성별만 바꾼 경우(말투를 직접 고정하지 않음) 말투도 함께 바뀐다 — 지금 대화에도 바로 반영.
+            #   자동으로 정한 말투는 설정 파일에 쓰지 않는다(다음 성별 변경에도 계속 자동).
+            if "펫.성별" in keys and "비서.말투" not in keys and S.get(CFG, "비서.말투") != old_tone:
+                keys.append("비서.말투")
             if (CFG.get("기억") or {}).get("켜기", True) != mem_was:
                 MEM = _make_memory()
         groups = S.when_groups(keys)
@@ -734,7 +741,7 @@ def make_app():
             async with httpx.AsyncClient(timeout=httpx.Timeout(4.0, connect=2.0)) as cl:
                 r = await cl.get(f"http://127.0.0.1:{int(CFG['포트']['목소리'])}/status")
                 j = r.json()
-                out["목소리"] = {k: j.get(k) for k in ("engine", "device", "ready", "fallback_reason") if k in j}
+                out["목소리"] = {k: j.get(k) for k in ("engine", "device", "ready", "fallback_reason", "voice", "voice_fallback") if k in j}
         except Exception:  # noqa: BLE001
             pass
         try:

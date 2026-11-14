@@ -165,7 +165,9 @@ class Session:
         if "두뇌.모드" in keys and self.llm is not None and hasattr(self.llm, "mode"):
             self.llm.mode = str(cfg["두뇌"].get("모드") or "빠른")
             done.append("두뇌 모드")
-        if "목소리.목소리" in keys and getattr(self, "_tts", None) is not None:
+        if keys & {"목소리.목소리", "펫.성별"} and getattr(self, "_tts", None) is not None:
+            # 목소리 서버는 요청마다 "voice" 를 받으므로(ensure_voice) 서버를 다시 켜지 않아도
+            # 다음 문장부터 새 목소리로 말한다. 자산이 없으면 서버가 기본 목소리로 대체하고 로그를 남긴다.
             m = getattr(self._tts, "mouth", None)
             if m is not None and hasattr(m, "voice"):
                 m.voice = (cfg.get("목소리") or {}).get("목소리") or None

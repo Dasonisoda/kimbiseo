@@ -38,10 +38,10 @@ def test_validate_good_values():
 def test_validate_rejects_bad_values():
     cfg, _ = fresh_cfg()
     _c, err, _w = S.validate({"대화.끼어들기_감도": 0.9, "목소리.말속도": True, "두뇌.방식": "몰라", "포트.본체": 1,
-                              "두뇌.주소": "ftp://x", "비서.이름": "!!!", "목소리.목소리": "kimbiseo_m"}, cfg)
+                              "두뇌.주소": "ftp://x", "비서.이름": "!!!", "목소리.목소리": "kimbiseo_x"}, cfg)
     for k in ("대화.끼어들기_감도", "목소리.말속도", "두뇌.방식", "포트.본체", "두뇌.주소", "비서.이름", "목소리.목소리"):
         assert k in err, (k, err)
-    assert "준비" in err["목소리.목소리"], "준비 안 된 목소리는 고를 수 없음"
+    assert "모르는" in err["목소리.목소리"], "목록에 없는 목소리는 고를 수 없음"
 
 
 def test_validate_honorific_length_and_aliases():

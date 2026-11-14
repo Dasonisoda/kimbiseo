@@ -57,7 +57,8 @@ QWEN_GPU_FREE_MIN_MIB = 3300
 
 STATE = dict(judge=None, engine=None, engine_name=None, device=None, dtype=None, busy=False, waiting=0, started=time.time(),
              served=0, cache_hits=0, error=None, fallback_reason=None, last_use=time.time(), voices={}, default_voice="",
-             voice_load={}, cache_dir=None, log=print, show_text=False, cfg=None, wanted=None, switched_at=None, switch_after=None)
+             voice_load={}, voice_fallback=None, cache_dir=None, log=print, show_text=False, cfg=None, wanted=None,
+             switched_at=None, switch_after=None)
 GEN_LOCK = threading.Lock()
 WAIT_LOCK = threading.Lock()
 _SWITCHED = object()
@@ -149,16 +150,47 @@ def voice_folder(name):
     return folder if os.path.isabs(folder) else os.path.normpath(os.path.join(C.REPO, folder))
 
 
+def voice_asset_problem(name):
+    """그 목소리의 참고음성(참고목록.json + wav)이 쓸 수 있는지 → 문제 한 줄(없으면 "")."""
+    folder = voice_folder(name)
+    if not folder:
+        return "폴더 정보 없음"
+    manifest = os.path.join(folder, "참고목록.json")
+    if not os.path.isfile(manifest):
+        return "참고음성 없음"
+    try:
+        with open(manifest, encoding="utf-8-sig") as f:
+            j = json.load(f)
+    except (OSError, ValueError):
+        return "참고목록.json 읽기 실패"
+    base = j.get("기본") if isinstance(j.get("기본"), dict) else {}
+    wav = str(base.get("wav") or "").strip()
+    if not wav:
+        return "참고음성 없음"
+    if not os.path.isfile(os.path.join(folder, wav)):
+        return f"참고음성 파일 없음({wav})"
+    return ""
+
+
 def ensure_voice(name):
-    """기본 목소리가 아니면 그 목소리 참고음성을 엔진에 올림(GEN_LOCK 안에서 부름). → 엔진에 넘길 voice 값(None = 기본)."""
+    """기본 목소리가 아니면 그 목소리 참고음성을 엔진에 올림(GEN_LOCK 안에서 부름). → 엔진에 넘길 voice 값(None = 기본).
+    자산이 없는 목소리(kimbiseo_m 등)가 선택되면 기본 목소리로 대체하고 이유를 한 줄 남긴다(서버 재시작 불필요)."""
     if not name or name == STATE["default_voice"] or STATE["engine_name"] != "qwen":
         return None
     eng = STATE["engine"]
     if name not in eng.voices:
+        problem = voice_asset_problem(name)
+        if problem:
+            fallback = STATE["default_voice"] or "kimbiseo"
+            reason = f"목소리 {name} {problem} → 기본 {fallback} 사용"
+            STATE["voice_fallback"] = {"voice": name, "fallback": fallback, "reason": reason}
+            log(reason)
+            return None
         from tts_engine import load_refs
         t0 = time.perf_counter()
         folder = voice_folder(name)
         eng.add_voice(name, load_refs(folder), folder)
+        STATE["voice_fallback"] = None
         STATE["voice_load"][name] = round(time.perf_counter() - t0, 2)
         log(f"목소리 '{name}' 올림 {STATE['voice_load'][name]}초 · 그래픽 메모리 {vram_info()}")
     return name
@@ -439,7 +471,8 @@ class H(BaseHTTPRequestHandler):
                                  raw_stream=True, speed_on_server=bool(eng is not None and (getattr(eng, "native_speed", False) or speed_available())),
                                  voice=STATE["default_voice"], voices=list(STATE["voices"]),
                                  voices_loaded=list(getattr(eng, "voices", {}) or {}) if eng else [],
-                                 voice_load_sec=STATE["voice_load"], vram=vram_info(), wanted_engine=STATE["wanted"],
+                                 voice_load_sec=STATE["voice_load"], voice_fallback=STATE["voice_fallback"],
+                                 vram=vram_info(), wanted_engine=STATE["wanted"],
                                  switched_at=STATE["switched_at"], **extra))
         else:
             self._json(404, {"error": "없는 주소"})
