@@ -118,7 +118,13 @@ function savedMessage(r) {
   if ((g["다음대화"] || []).length) out.push(`${g["다음대화"].join("·")}은(는) 다음 대화부터 바뀌어요`);
   const rs = g["다시켜기"] || {};
   Object.keys(rs).forEach((k) => out.push(`${rs[k].join("·")}은(는) ${k === "귀" ? "받아쓰기 서버" : "목소리 서버"}를 다시 켜야 바뀌어요`));
-  if ((g["펫"] || []).length) out.push("펫은 다음에 켜질 때 바뀌어요");
+  if ((g["펫"] || []).length) {
+    const po = (r["펫"] || {})["옷"];      // 켜져 있는 펫이 '옷 갈아입기'에 한 대답(펫이 꺼져 있으면 코드 없음)
+    if (po && po["받는중"]) out.push("펫이 새 옷을 받는 중이에요(다 받으면 갈아입어요)");
+    else if (po && po["ok"]) out.push("펫 옷을 바꿨어요");
+    else if (po && po["코드"] && po["error"]) out.push("펫: " + po["error"]);
+    else out.push("펫은 다음에 켜질 때 바뀌어요");
+  }
   return "저장했어요. " + out.join(". ") + ".";
 }
 

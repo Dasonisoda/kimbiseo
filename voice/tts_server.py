@@ -395,8 +395,16 @@ def prepare(body):
     voice = body.get("voice")
     if isinstance(voice, str) and voice not in STATE["voices"]:   # 목록에 새로 넣은 목소리 — 서버 재시작 없이 다시 읽음
         STATE["voices"] = load_voice_list()[0]
-    if voice is not None and (not isinstance(voice, str) or voice not in STATE["voices"]):
-        raise ValueError(f"voice 는 {list(STATE['voices'])} 중 하나")
+    if voice is not None and not isinstance(voice, str):
+        raise ValueError("voice 는 글자")
+    if voice is not None and voice not in STATE["voices"]:
+        # 모르는 목소리 이름(옛 설정·다른 판의 옷 꾸러미 등) → 말이 빠지지 않게 기본 목소리로 말하고 이유를 남김
+        fallback = STATE["default_voice"] or "kimbiseo"
+        reason = f"목소리 {voice[:40]} 는 목록에 없음 → 기본 {fallback} 사용"
+        if (STATE["voice_fallback"] or {}).get("reason") != reason:
+            log(reason)
+        STATE["voice_fallback"] = {"voice": voice[:40], "fallback": fallback, "reason": reason}
+        voice = None
     body["_voice"] = voice
     try:
         speed = min(2.0, max(0.5, float(body.get("speed") or 1.0)))
@@ -574,7 +582,7 @@ class H(BaseHTTPRequestHandler):
                 self._json(200, {"wav_base64": base64.b64encode(b).decode("ascii"), "lip": lip_from_pcm16(pcm, SR),
                                  "read": read, "emotion": emo, "yawn": self._yawn_word, "audio_sec": round(len(pcm) / SR, 2),
                                  "gen_sec": round(gen, 2), "cache": "hit" if hit else "miss", "engine": STATE["engine_name"],
-                                 "speed_applied": applied})
+                                 "speed_applied": applied, "voice": voice or STATE["default_voice"]})
                 STATE["served"] += 1
                 log(f"/tts_lip {emo} {len(pcm) / SR:.1f}초 소리 / {gen:.2f}초 | {shown(read)}")
                 return
@@ -587,6 +595,7 @@ class H(BaseHTTPRequestHandler):
             self.send_header("X-Gen-Seconds", f"{gen:.2f}")
             self.send_header("X-Cache", "hit" if hit else "miss")
             self.send_header("X-Engine", STATE["engine_name"])
+            self.send_header("X-Voice", urllib.parse.quote(str(voice or STATE["default_voice"] or "")))   # 실제로 말한 목소리(대체됐으면 기본)
             self.send_header("X-Speed-Applied", "1" if applied else "0")
             if self._yawn_word:
                 self.send_header("X-Yawn", "1")
@@ -674,6 +683,7 @@ class H(BaseHTTPRequestHandler):
         self.send_header("Transfer-Encoding", "chunked")
         self.send_header("X-Emotion", urllib.parse.quote(emo))
         self.send_header("X-Engine", STATE["engine_name"])
+        self.send_header("X-Voice", urllib.parse.quote(str(voice or STATE["default_voice"] or "")))
         self.send_header("X-Speed-Applied", "1" if applied else "0")
         if self._yawn_word:
             self.send_header("X-Yawn", "1")

@@ -118,6 +118,47 @@ def mode_on(cfg):
     return str((cfg.get("화면") or {}).get("얼굴") or "기본") == "펫"
 
 
+_OUTFIT = {"t": 0.0, "v": None, "port": None}
+_OUTFIT_LOCK = threading.Lock()
+
+
+def pet_outfit(cfg, max_age=0.5, timeout=0.6):
+    """펫이 지금 입은 옷 {"id", "gender", "voice"(꾸러미 pack.json 의 voice, 없으면 "")} — 옷이 없거나 펫이 꺼져 있으면 None.
+    목소리 고르기(core/voice_choice.voice_for_outfit)가 문장마다 부르므로 max_age 초 동안은 기억한 값을 준다.
+    펫에 못 붙으면 5초 동안 다시 묻지 않는다(말이 늦어지지 않게)."""
+    try:
+        port = int(cfg["포트"]["펫"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    with _OUTFIT_LOCK:
+        now = time.time()
+        if _OUTFIT["port"] == port and now < _OUTFIT["t"]:
+            return _OUTFIT["v"]
+        val, keep = None, 5.0
+        try:
+            c = http.client.HTTPConnection("127.0.0.1", port, timeout=timeout)
+            c.request("GET", "/extras", headers={"Host": "127.0.0.1"})
+            r = c.getresponse()
+            raw = r.read(4 << 20)      # 동작이 많은 옷은 표가 큼(수백 KB) — 넉넉히
+            c.close()
+            j = json.loads(raw.decode("utf-8") or "{}") if r.status == 200 else {}
+            if isinstance(j, dict) and j.get("ok"):
+                keep = max_age
+                if isinstance(j.get("skin"), str) and j["skin"]:
+                    val = {"id": j["skin"][:40], "gender": str(j.get("gender") or "")[:10],
+                           "voice": str(j.get("packVoice") or "")[:40]}
+        except (OSError, ValueError, http.client.HTTPException):
+            val = None
+        _OUTFIT.update(t=time.time() + keep, v=val, port=port)
+        return val
+
+
+def forget_outfit():
+    """옷을 방금 바꿨을 때(설정 저장 → 펫 /skin) 기억한 옷을 버려 다음 문장이 바로 새 옷을 보게 한다."""
+    with _OUTFIT_LOCK:
+        _OUTFIT["t"] = 0.0
+
+
 def guess_emotion(text):
     for emo, pat in _KW:
         if re.search(pat, text or ""):

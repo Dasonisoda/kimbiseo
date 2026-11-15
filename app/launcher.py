@@ -14,6 +14,7 @@ import argparse
 import ctypes
 import json
 import os
+import re
 import socket
 import subprocess
 import sys
@@ -272,6 +273,9 @@ class Launcher:
             cmd = [exe, folder, "--profile=" + os.path.join(self.data, "pet")]
             if pc.get("옷_받기") is True:
                 cmd.append("--auto-pack")
+            want = str(pc.get("옷") or "").strip()
+            if re.fullmatch(r"[0-9A-Za-z_-]{1,40}", want):   # 설정에서 고른 펫 캐릭터 — 옷이 하나도 없을 때 펫이 이 옷부터 받음
+                cmd.append("--want-pack=" + want)
             src = str(pc.get("옷목록_주소") or "").strip()
             if src and src not in OLD_PACK_CATALOGS:   # 옛 판 기본 주소는 넘기지 않음 → 펫 config.json 의 새 옷 목록(+ 옛 주소는 예비)
                 cmd.append("--pack-source=" + src)

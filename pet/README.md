@@ -24,6 +24,7 @@ npx electron .
 | `--add-pack=<파일>` | 옷 꾸러미 파일을 넣음(파일 두 번 누르기와 같음) |
 | `--assoc` | `.hipcpet` 파일 연결을 이 펫으로(현재 사용자만, 켤 때만) |
 | `--auto-pack` / `--no-auto-pack` | 옷이 없을 때 기본 옷을 저절로 받기 켬/끔(기본 끔) |
+| `--want-pack=<옷 id>` | 본체 설정에서 고른 펫 캐릭터(실행기가 넘김). 옷이 하나도 없으면 이 옷부터 받고, 본체 설정이 바뀌었으면 그 옷으로 갈아입음 |
 | `--lip=off` | 입 맞추기 끔 |
 
 ## 설정 (`config.json`)
@@ -34,6 +35,7 @@ npx electron .
 | `packs_catalog_backup` | 본 저장소 최신 릴리스 `packs.json` | 첫 주소가 안 될 때 쓰는 예비 목록(같은 옷을 가리키는 옛 모양) |
 | `allowed_hosts` | GitHub 4곳 | 옷 목록·미리보기·옷을 받아도 되는 https 호스트(github.com · raw.githubusercontent.com · 릴리스 파일 서버 2곳). 이 PC(127.0.0.1·localhost)는 늘 허용 |
 | `voice_url` | `http://127.0.0.1:8871` | 김비서 목소리 서버(펫 메뉴의 '말하기 시험'용, 이 PC 주소만) |
+| `voices_file` | (빈칸 = `../voice/voices.json`) | 목소리 목록·옷→목소리 대응표. 지금 입은 옷에 맞는 목소리 이름을 목소리 서버 요청에 넣는 데 씀 |
 | `port` | `17961` | 펫 신호 입구. 쓰는 중이면 +1~+9, 실제 번호는 사용자 자료 폴더의 `speak_port.txt` |
 | `default_pack` | `kimbiseo_f` | 기본 옷 id |
 
@@ -52,9 +54,9 @@ npx electron .
 | `/talk` | `{"on":true}` 말하는 중 켬/끔 |
 | `/bubble` | `{"text":"…","seconds":4}` 말풍선(300자까지) |
 | `/speak` | `{"text":"…"}` 말풍선 + 목소리(목소리 서버가 있을 때) |
-| `/skin` | `{"id":"kimbiseo_f"}` 옷 바꾸기 |
+| `/skin` | `{"id":"kimbiseo_f"}` 옷 바꾸기. 아직 없는 옷이면(옷 받기에 동의했을 때) 옷 목록에서 받아서 입고 `{"fetching": true}` 로 답함 |
 | `/packs/auto` | `{}` 옷 목록에서 기본 옷을 받아 입기(처음 화면에서 '옷 받기'에 동의했을 때 본체가 부름). 목록 주소가 없으면 `nosource` |
-| `GET /status`, `/extras`, `/emotions` | 상태 · 지금 옷의 동작/춤/자세별 동작 표 · 감정 목록 |
+| `GET /status`, `/extras`, `/emotions` | 상태 · 지금 옷의 동작/춤/자세별 동작 표(+ 옷 id `skin`·성별 `gender`·꾸러미 목소리 `packVoice`) · 감정 목록 |
 
 ### 자세별 동작
 
@@ -68,13 +70,14 @@ npx electron .
 zip 파일입니다.
 
 ```
-pack.json        {"format":"hipcpet/1","id":…,"name":…,"version":…,"clips":{…},"music":[…],"files":{"<이름>":{"size":…,"sha256":…}}}
+pack.json        {"format":"hipcpet/1","id":…,"name":…,"version":…,"gender":"여성|남성","voice":"<목소리 이름>(선택)","clips":{…},"music":[…],"files":{"<이름>":{"size":…,"sha256":…}}}
 signature.json   {"alg":"ed25519","key":"kimbiseo-pack-1","sig":"<pack.json 바이트의 서명>"}
 preview.png
 clips/*.webm
 music/*.mp3      (노래 포함판만)
 ```
 
+- `gender`·`voice`: 이 옷을 입었을 때의 목소리를 고르는 데 씁니다. `voice`(선택)는 이 옷만의 목소리 이름이고, 없으면 `voice/voices.json` 의 `옷목소리`(옷 id → 성별 순)로 고릅니다.
 - 서명 있는 꾸러미: 서명이 맞고, 모든 파일의 sha256 이 `pack.json` 과 같고, 목록에 없는 파일이 없어야 들어갑니다. 하나라도 틀리면 거절합니다.
 - 서명 없는 꾸러미: "공식 꾸러미가 아니에요" 경고를 띄우고 사용자가 고를 때만 넣습니다.
 - 옷 목록에 `"signed": true` 인 옷인데 받은 파일에 서명이 없으면 거절합니다.
@@ -105,7 +108,8 @@ music/*.mp3      (노래 포함판만)
      "description": "기본 옷 …", "size": 169125507, "sha256": "…", "signed": true, "sign_key": "kimbiseo-pack-1",
      "url": "https://github.com/sinhs0301-prog/kimbiseo-outfits/releases/download/<태그>/<꾸러미>.hipcpet",
      "preview": "previews/<그림>.png", "default": true, "songs": false},
-    {"id": "kimbiseo_m", "name": "김비서(남)", "gender": "남성", "soon": true, "description": "준비 중이에요"}
+    {"id": "kimbiseo_m", "name": "김비서(남)", "version": "…", "body": "7.7등신", "gender": "남성", "…": "같은 칸들", "default": false},
+    {"id": "<준비 중인 옷>", "name": "…", "soon": true, "description": "준비 중이에요"}
   ]
 }
 ```

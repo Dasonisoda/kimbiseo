@@ -7,8 +7,8 @@
 
 - 이름: '김비서'라는 캐릭터 이름과 그 이름을 쓴 표시
 - 얼굴: 캐릭터 그림·움직임 자료·영상 클립·미리보기 그림 (영상 클립은 AI 영상 도구(MiniMax H3)로 만든 것)
-- 목소리: 김비서 목소리 참고음성(`assets/voice/kimbiseo/default.wav`)과, 그것으로 만든 합성 목소리
-  — 참고음성은 사람 녹음이 아니라 Qwen3-TTS VoiceDesign 으로 합성해 만든 목소리입니다.
+- 목소리: 김비서 목소리 참고음성(`assets/voice/kimbiseo/default.wav` — 여, `assets/voice/kimbiseo_m/default.wav` — 남)과, 그것으로 만든 합성 목소리
+  — 두 참고음성 모두 사람 녹음이 아니라 Qwen3-TTS VoiceDesign 으로 합성해 만든 목소리입니다.
 - 옷 꾸러미: 따로 내려받는 옷(영상·그림·움직임 정보) 꾸러미 전부 — 공개판 기본 꾸러미는 노래(음악)가 들어 있지 않은 판입니다(춤 동작은 소리 없이 나옴).
 
 ## 2. 허용하는 것

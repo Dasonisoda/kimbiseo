@@ -214,7 +214,9 @@ const http = require('http');
 const EXPR2EMO = { '기쁨': '기쁨', '놀람': '놀람', '졸림': '졸림', '걱정': '걱정' };   // 그 밖의 표정 = 기본 목소리
 
 class VoiceServer {
-  constructor(url, log) {
+  /** voicesFile = 목소리 목록·옷→목소리 대응표(voice/voices.json) 경로 — 없으면 voiceFor 는 늘 null */
+  constructor(url, log, voicesFile) {
+    this.vfile = voicesFile || null; this._vmap = null; this._badVoice = {};
     let u = null;
     try { u = new URL(String(url || 'http://127.0.0.1:8871')); } catch (e) { u = null; }
     // 이 PC 안 주소만(목소리 서버도 127.0.0.1 만 받음)
@@ -237,8 +239,31 @@ class VoiceServer {
     });
   }
   async status() { try { return (await this._req('GET', '/status', null, 3000)).json; } catch (e) { return null; } }
-  /** 문장 → {wav, data, yawn, voice}. 서버가 없거나 준비 전이면 실패(→ 윈도우 음성) */
-  async synth(text, rate, expr) {
+  /** 지금 입은 옷(꾸러미) → 목소리 이름 또는 null(= 서버 기본 목소리).
+      대응표는 한 곳 = voice/voices.json 의 "옷목소리" {"성별": {"남성": "kimbiseo_m", …}, "옷": {"<옷 id>": "<목소리>"}} (본체 core/voice_choice.py 와 같은 파일·같은 순서).
+      고르는 순서 = 꾸러미 pack.json "voice"(선택) → "옷"[id] → "성별"[gender]. 그 이름이 "목록" 에 없거나 참고음성(참고목록.json)이 없으면 건너뜀.
+      대응표 파일이 없거나 못 읽으면 늘 null = 예전과 똑같은 요청. */
+  voiceFor(pack) {
+    if (!pack || !this.vfile) return null;
+    try {
+      const st = fs.statSync(this.vfile), key = st.size + ':' + st.mtimeMs;
+      if (!this._vmap || this._vmap.key !== key) {
+        const j = JSON.parse(fs.readFileSync(this.vfile, 'utf8').replace(/^﻿/, ''));
+        const om = (j && typeof j['옷목소리'] === 'object' && j['옷목소리']) || {};
+        this._vmap = { key, gender: om['성별'] || {}, skin: om['옷'] || {}, list: (j && j['목록']) || {}, root: path.dirname(path.dirname(this.vfile)) };
+      }
+      const m = this._vmap, now = Date.now(), g = String(pack.gender || '');
+      const byGender = m.gender[g] || m.gender[g + '성'] || m.gender[g.replace(/성$/, '')];
+      for (const name of [pack.voice, m.skin[pack.id], byGender]) {
+        if (typeof name !== 'string' || !name || !m.list[name] || this._badVoice[name] > now) continue;
+        const folder = String(m.list[name]['폴더'] || '');
+        if (folder && fs.existsSync(path.join(path.isAbsolute(folder) ? folder : path.join(m.root, folder), '참고목록.json'))) return name;
+      }
+    } catch (e) { /* 대응표를 못 읽으면 기본 목소리 */ }
+    return null;
+  }
+  /** 문장 → {wav, data, yawn, voice}. 서버가 없거나 준비 전이면 실패(→ 윈도우 음성). voiceName = voiceFor() 결과 — 없으면 요청에 안 넣음 */
+  async synth(text, rate, expr, voiceName) {
     if (!this.emotions || Date.now() - this.checked > 60000) {
       const st = await this.status();
       this.checked = Date.now();
@@ -249,9 +274,17 @@ class VoiceServer {
     }
     let emo = EXPR2EMO[expr] || '기본';
     if (this.emotions && !this.emotions.includes(emo)) emo = '기본';
-    const body = Buffer.from(JSON.stringify({ text, emotion: emo }), 'utf8');
+    const mk = v => Buffer.from(JSON.stringify(v ? { text, emotion: emo, voice: v } : { text, emotion: emo }), 'utf8');
     let r;
-    try { r = await this._req('POST', '/tts_lip', body); }
+    try {
+      r = await this._req('POST', '/tts_lip', mk(voiceName));
+      if (voiceName && (r.code === 400 || r.code === 500) && !/읽을 글/.test(String(r.json.error || ''))) {
+        // 서버가 그 목소리를 모르거나 못 올림 → 그 이름은 5분 쉬고 이 문장은 기본 목소리로 다시(말이 빠지지 않게)
+        this._badVoice[voiceName] = Date.now() + 300000;
+        this.log('목소리 서버가 voice ' + voiceName + ' 거절(' + r.code + ' ' + String(r.json.error || '').slice(0, 80) + ') → 기본 목소리로 다시');
+        r = await this._req('POST', '/tts_lip', mk(null));
+      }
+    }
     catch (e) { this.down = true; this.emotions = null; throw e; }
     if (r.code !== 200) throw Object.assign(new Error(r.json.error || ('목소리 서버 ' + r.code)), { code: r.code });
     if (r.json.voice) this.voiceName = String(r.json.voice).slice(0, 40);

@@ -1,6 +1,6 @@
 'use strict';
 /* 김비서 펫 옷 꾸러미(.hipcpet)
-   꾸러미 = zip 파일 1개: pack.json(이름·버전·체형·성별·미리보기·클립·파일 목록) + signature.json(선택, ed25519) + preview + clips/ + music/(선택)
+   꾸러미 = zip 파일 1개: pack.json(이름·버전·체형·성별·목소리(voice, 선택)·미리보기·클립·파일 목록) + signature.json(선택, ed25519) + preview + clips/ + music/(선택)
    설치 = <프로필>\옷\<id>\ 에 풀어 둠. 펫은 그 폴더들만 읽어 옷 목록을 만듦(프로그램 안에는 클립이 없음).
    지키는 것: 받는 확장자 webm·mp4·png·webp·jpg·jpeg·mp3·json·txt 만 / ../·절대경로·드라이브·역슬래시·숨은 이름 거부 /
      파일 하나 100MB·전체 1.2GB·3000개까지 / 암호·zip64·이상한 압축 거부 / 압축 풀린 크기·CRC 확인 /
@@ -253,6 +253,7 @@ function list(user) {
       const mouthN = attachMouth(p, pj.id, clips, files);
       const prev = pj.preview ? path.resolve(p, ...String(pj.preview).split('/')) : null;
       out.push({ id: pj.id, name: pj.name, version: pj.version || '', body: pj.body || '', gender: pj.gender || '',
+        voice: typeof pj.voice === 'string' && /^[a-z0-9_]{1,40}$/.test(pj.voice) ? pj.voice : '',   // voice(선택) = 이 옷만의 목소리 이름(voice/voices.json 목록)
         signed: meta.sig === '정품', dir: p, img: prev && prev.startsWith(p + path.sep) && fs.existsSync(prev) ? fileUrl(prev) : null,
         stage: pj.stage, fps: pj.fps, walkSpeed: pj.walkSpeed, clips,
         music: (pj.music || []).map(m => ({ ...m, path: path.resolve(p, ...String(m.file).split('/')) })).filter(m => m.path.startsWith(p + path.sep) && fs.existsSync(m.path)),

@@ -123,6 +123,8 @@ def voice_warning(cfg, clean):
         return ""
     user = V.user_from_cfg(cfg)
     pinned = clean["목소리.목소리"] if "목소리.목소리" in clean else V.user_voice(user)
+    if pinned == V.AUTO:
+        pinned = None
     if pinned:
         target = pinned
     else:
@@ -190,6 +192,8 @@ def _check(key, rule, v, ch):
             raise ValueError("목록에 있는 펫만 고를 수 있어요.")
         return v
     if t == "voice":
+        if v == V.AUTO:      # '옷에 맞춤(자동)' — 직접 고르지 않음
+            return v
         ok = [x["id"] for x in ch.get("목소리", []) if x.get("준비")]
         if v not in ok:
             raise ValueError("아직 준비되지 않은 목소리예요." if v in [x["id"] for x in ch.get("목소리", [])] else "모르는 목소리예요.")
@@ -259,7 +263,17 @@ def when_groups(keys):
 
 
 def changed_keys(cfg, clean):
-    return [k for k, v in clean.items() if get(cfg, k) != v]
+    out = []
+    for k, v in clean.items():
+        if k == "목소리.목소리" and isinstance(cfg.get("_voice_choice"), dict):
+            # cfg 에는 자동으로 고른 실제 이름이 들어 있다 — '자동 → 자동' 만 안 바뀐 것이고,
+            # 자동일 때 같은 이름을 직접 고르면 그때부터 고정이므로 바뀐 것으로 본다.
+            auto_now = bool(cfg["_voice_choice"].get("자동"))
+            if (v == V.AUTO and not auto_now) or (v != V.AUTO and (auto_now or get(cfg, k) != v)):
+                out.append(k)
+        elif get(cfg, k) != v:
+            out.append(k)
+    return out
 
 
 def view(cfg):
@@ -269,8 +283,12 @@ def view(cfg):
     out["비서.이름"], out["비서.별칭"] = name, al
     out["열쇠"] = {n: bool(keystore.get(n, cfg)) for n in SECRET_NAMES}
     v = nest(out)
-    # 화면이 '성별에 맞춰 자동으로 골랐는지 / 자산이 없어 대체되는지' 를 보여 줄 수 있게.
-    v.setdefault("목소리", {})["해석"] = V.describe(cfg)
+    # 화면이 '옷·성별에 맞춰 자동으로 골랐는지 / 자산이 없어 대체되는지' 를 보여 줄 수 있게.
+    #   자동이면 화면의 고른 값은 "auto"('옷에 맞춤(자동)'), 실제로 고른 이름은 해석["목소리"].
+    d = V.describe(cfg)
+    v.setdefault("목소리", {})["해석"] = d
+    if d.get("자동"):
+        v["목소리"]["목소리"] = V.AUTO
     return v
 
 

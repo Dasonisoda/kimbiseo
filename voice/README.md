@@ -20,10 +20,12 @@ python voice/tts_server.py  [--settings 설정.json] [--device auto|cuda|cpu] [-
 - 목소리는 **참고음성**(김비서 목소리 샘플)이 있어야 김비서 목소리로 말합니다. 없으면 윈도우 기본 음성으로 말하고
   `/status` 의 `fallback_reason` 에 이유가 나옵니다. 참고음성 폴더 = 설정 `목소리.참고음성_폴더`
   (그 안에 `참고목록.json` = `{"기본": {"wav": "파일.wav", "text": "그 파일에서 하는 말"}}`).
-- 목소리는 `voices.json` 의 목록을 씁니다. 기본목소리는 `kimbiseo`(여)이고, `kimbiseo_m`(김비서(남)) 항목도 있습니다.
-  사용자 설정에 `목소리.목소리` 가 없으면 `펫.성별` 로 자동 선택합니다(여 → `kimbiseo`, 남 → `kimbiseo_m`).
-  고른 목소리의 참고음성이 없으면 **기본목소리 `kimbiseo` 로 대체**하고
-  `목소리 kimbiseo_m 참고음성 없음 → 기본 kimbiseo 사용` 한 줄을 `voice.log` 에 남깁니다.
+- 목소리는 `voices.json` 의 목록을 씁니다. 기본목소리는 `kimbiseo`(여)이고, `kimbiseo_m`(김비서(남))도 있습니다.
+  서버를 켤 때의 목소리: 사용자 설정에 `목소리.목소리` 가 있으면 그것, 없으면(또는 `auto`) `펫.성별`(여 → `kimbiseo`, 남 → `kimbiseo_m`).
+  요청마다 `"voice"` 를 받습니다 — 본체와 펫은 **펫이 지금 입은 옷**에 맞는 이름을 보냅니다(`voices.json` 의 `옷목소리`).
+  고른 목소리의 참고음성이 없거나 목록에 없는 이름이면 **기본목소리로 말하고**
+  `목소리 kimbiseo_m 참고음성 없음 → 기본 kimbiseo 사용` 같은 한 줄을 `voice.log` 와 `/status` 의 `voice_fallback` 에 남깁니다.
+  실제로 말한 목소리 이름은 응답 머리 `X-Voice`(`/tts`·`/tts_stream`)와 `/tts_lip` 의 `voice` 에 나옵니다.
 - 자세한 자산 폴더 규칙은 `assets/voice/README.md` 를 보세요.
 - 실행 관리가 켤 때는 `--parent_pid` 를 주면 실행 관리가 끝날 때 같이 끝납니다.
 

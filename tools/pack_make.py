@@ -14,7 +14,7 @@
 사용법
   python tools/pack_make.py --src <원본.hipcpet> --out <새.hipcpet> --key <비밀키.pem> --key-id kimbiseo-pack-1
          --id kimbiseo_f --name 김비서 --gender 여성 --body 7.5등신 --version 2026.11.11.2 --maker <만든 곳>
-         [--music keep|none] [--drop-clip a,b] [--note 한 줄 설명]
+         [--music keep|none] [--drop-clip a,b] [--note 한 줄 설명] [--voice 목소리 이름]
 표준 라이브러리만 씁니다(서명만 node).
 """
 from __future__ import annotations
@@ -33,8 +33,9 @@ import zipfile
 import zlib
 from pathlib import Path
 
-TOP_KEYS = ("format", "id", "name", "version", "character", "body", "gender", "preview", "maker", "made", "note",
+TOP_KEYS = ("format", "id", "name", "version", "character", "body", "gender", "voice", "preview", "maker", "made", "note",
             "stage", "fps", "walkSpeed", "clips", "music", "files")
+VOICE_RE = re.compile(r"^[a-z0-9_]{1,40}$")
 CLIP_KEYS = {"w", "h", "x", "y", "frames", "dur", "file", "headX", "headY", "loops", "enter", "cycle", "stopAt",
              "seamOut", "oneVideo", "music", "rootDx", "mouth", "px", "motion"}
 ID_RE = re.compile(r"^[0-9A-Za-z_-]{1,40}$")
@@ -84,9 +85,12 @@ def main() -> int:
     ap.add_argument("--music", choices=("keep", "none"), default="keep")
     ap.add_argument("--drop-clip", default="")
     ap.add_argument("--note", default="")
+    ap.add_argument("--voice", default="", help="이 옷만의 목소리 이름(voice/voices.json 목록의 이름). 비우면 칸을 안 넣음 = 성별 규칙")
     a = ap.parse_args()
     if not ID_RE.match(a.id):
         raise SystemExit("id 는 영어·숫자·_·- 40자까지")
+    if a.voice and not VOICE_RE.match(a.voice):
+        raise SystemExit("voice 는 영어 소문자·숫자·_ 40자까지(voice/voices.json 목록의 이름)")
     src, out, key = Path(a.src), Path(a.out), Path(a.key)
     tool = Path(__file__).resolve().parent / "pack_sign.js"
     if out.exists():
@@ -142,6 +146,8 @@ def main() -> int:
           "made": _dt.datetime.now().replace(microsecond=0).isoformat()}
     if a.note:
         pj["note"] = a.note
+    if a.voice:      # 원본 꾸러미의 voice 는 옮기지 않음(이 저장소 목록에 없는 이름일 수 있음) — 인자로 준 것만
+        pj["voice"] = a.voice
     for k in ("stage", "fps", "walkSpeed"):
         if k in old:
             pj[k] = old[k]

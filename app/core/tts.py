@@ -3,6 +3,9 @@
 #   - 첫 조각은 첫 쉼표에서 먼저 읽기(설정 목소리.첫쉼표_먼저읽기), 긴 문장(20글자+)은 쉼표에서 끊기(숫자 쉼표 제외).
 #   - 영어 문장(생각 글이 새어 나온 것)은 외국어 모드가 아니면 읽지 않음. 답 대부분이 막히면 한마디 안내.
 #   - 말 빠르기(목소리.말속도 1.0/1.2/1.4): 서버가 줄였으면(X-Speed-Applied 1) 그대로, 아니면 여기서 줄임(PyAV 있을 때).
+#   - 목소리: 문장마다 다시 고름(voice_choice.voice_now) — 직접 고른 목소리 > 펫이 지금 입은 옷 > 펫 성별 설정.
+#     펫 옷을 갈아입으면 다음 문장부터 그 옷의 목소리. 서버가 그 이름을 거절하면 기본 목소리로 다시 말함(voice_link).
+import asyncio
 import re
 
 from loguru import logger
@@ -14,6 +17,7 @@ from pipecat.utils.text.base_text_aggregator import Aggregation, TextType
 from pipecat.utils.text.simple_text_aggregator import SimpleTextAggregator
 
 from .audio_smooth import SeamSmoother
+from . import voice_choice
 from .filters import foreign_clean, lang_active, mostly_english, tts_clean
 from .voice_link import VoiceLink, speech_rate, text_norm
 
@@ -86,6 +90,24 @@ class VoiceTTS(TTSService):
         self._turn_seen = None
         self._spoken_n = self._blocked_n = 0
         self._noticed = False
+        self._voice_said = None
+
+    async def _pick_voice(self):
+        """이 문장을 말할 목소리 이름. 펫(얼굴 = 펫)이 켜져 있고 목소리를 직접 고르지 않았으면 지금 입은 옷으로."""
+        cfg = self.state.cfg
+        outfit = None
+        if getattr(self.state, "pet", None) is not None and not (cfg.get("_voice_choice") or {}).get("고정"):
+            try:
+                from ..pet_link.face import pet_outfit
+                outfit = await asyncio.to_thread(pet_outfit, cfg)
+            except Exception:  # noqa: BLE001
+                outfit = None
+        bad = getattr(self.mouth, "bad_voices", None)
+        name, why = voice_choice.voice_now(cfg, outfit, skip=bad() if callable(bad) else ())
+        if (name, why) != self._voice_said:
+            self._voice_said = (name, why)
+            logger.info(f"목소리: {name or '기본'} ({why}{' ' + outfit['id'] if why == '옷' and outfit else ''})")
+        return name
 
     @staticmethod
     def _hush(context_id):
@@ -121,6 +143,8 @@ class VoiceTTS(TTSService):
         if sm is not None:
             sm.start()
         first = True
+        if hasattr(self.mouth, "voice"):
+            self.mouth.voice = await self._pick_voice()
         try:
             async for msg, pcm in self.mouth.speak(text, speed):
                 kind = msg.get("type")

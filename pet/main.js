@@ -4,8 +4,11 @@
    - 옷 = 옷 꾸러미(.hipcpet). 프로그램 안에는 옷이 없음: 옷 목록(outfits.json — 옷 저장소)에서 고른 것만 받거나 파일로 넣음(<프로필>\옷\<id>\)
    - 김비서 본체가 표정·입·말풍선·동작 신호를 보냄: HTTP 입구 127.0.0.1:17961(쓰는 중이면 +1~+9, 실제 번호는 프로필 speak_port.txt)
    - 말하기 시험(메뉴)은 김비서 목소리 서버(config.json voice_url, 본체가 켬)가 있으면 그것, 없으면 윈도우 기본 음성
+   - 옷 → 목소리: 지금 입은 옷에 맞는 목소리 이름을 목소리 서버 요청에 넣음(대응표 = voice/voices.json "옷목소리" — speech.js voiceFor).
+     본체도 GET /extras 의 skin·gender·packVoice 로 같은 표를 봄 → 옷을 갈아입으면 다음 말부터 그 옷의 목소리
    실행 인자: --profile=<폴더>(설정·옷·로그를 그 폴더에) · --pack-source=<옷 목록 주소> · --add-pack=<파일> · --assoc(.hipcpet 파일 연결)
-             --auto-pack(옷이 없으면 기본 옷 저절로 받기) · --draw=canvas|video · --gpu-unblock
+             --auto-pack(옷이 없으면 기본 옷 저절로 받기) · --want-pack=<옷 id>(본체 설정의 펫 캐릭터 — 옷이 하나도 없을 때 이 옷부터 받음)
+             --draw=canvas|video · --gpu-unblock
              --virtual-screen=x,y,너비,높이(시험용: 진짜 화면 밖 좌표 → 창은 그려지지만 화면엔 안 보임, 가짜 커서, 소리 끔, 알림 영역 아이콘 없음) */
 const { app, BrowserWindow, ipcMain, screen, Tray, Menu, nativeImage } = require('electron');
 const path = require('path');
@@ -27,7 +30,7 @@ const addPackArgs = argv => argv.filter(a => a.startsWith('--add-pack=')).map(a 
 // 프로그램 설정(config.json): 옷 목록 주소·받아도 되는 호스트·목소리 서버 주소·포트
 const CONFIG = (() => {
   const d = { packs_catalog: '', packs_catalog_backup: '', allowed_hosts: ['github.com', 'raw.githubusercontent.com', 'objects.githubusercontent.com', 'release-assets.githubusercontent.com'],
-    voice_url: 'http://127.0.0.1:8871', port: 17961, default_pack: 'kimbiseo_f', dance_music: true };
+    voice_url: 'http://127.0.0.1:8871', voices_file: '', port: 17961, default_pack: 'kimbiseo_f', dance_music: true };
   try { return { ...d, ...JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf8')) }; } catch (e) { return d; }
 })();
 
@@ -55,7 +58,9 @@ function log(msg) {
 }
 const SETTINGS = path.join(USER, 'settings.json');
 // packSource = 옷 목록 주소(비우면 config.json) · autoPack = 옷이 없을 때 기본 옷 저절로 받기(처음 화면에서 동의했을 때만) · assoc = .hipcpet 파일 연결
-const DEFAULTS = { skin: null, size: '보통', onTop: true, x: null, y: null, musicVolume: '보통', packSource: '', autoPack: false, assoc: false };
+// wantPack = 본체가 입으라고 한 옷(아직 없어서 받는 중일 때만 남김 — 받아서 입으면 지움)
+// appliedWant = 마지막으로 반영한 본체 설정의 펫 캐릭터(--want-pack). 본체 설정이 바뀐 것을 알아보는 데만 씀(펫 메뉴에서 직접 갈아입은 옷은 그대로 둠)
+const DEFAULTS = { skin: null, size: '보통', onTop: true, x: null, y: null, musicVolume: '보통', packSource: '', autoPack: false, assoc: false, wantPack: '', appliedWant: null };
 let S = { ...DEFAULTS };
 try { S = { ...DEFAULTS, ...JSON.parse(fs.readFileSync(SETTINGS, 'utf8')) }; } catch (e) { /* 처음 실행 */ }
 if (!SIZES[S.size]) S.size = DEFAULTS.size;
@@ -364,7 +369,12 @@ function dragEnd() {
 
 // ---------------------------------------------------------------- 말하기 줄(메뉴 '말하기 시험'·/speak)
 const tts = new Tts(path.join(app.getPath('temp'), 'KimBiseoPet_tts_' + process.pid), path.join(__dirname, 'tts.ps1'), log);
-const voice = new VoiceServer(CONFIG.voice_url, log);
+// 목소리 목록·옷→목소리 대응표: 펫 폴더 옆의 voice/voices.json(저장소·설치 폴더 모두 pet 과 voice 가 나란히 있음), config.json voices_file 로 바꿀 수 있음
+const VOICES_FILE = CONFIG.voices_file ? path.resolve(__dirname, String(CONFIG.voices_file)) : path.join(__dirname, '..', 'voice', 'voices.json');
+const voice = new VoiceServer(CONFIG.voice_url, log, VOICES_FILE);
+// 지금 입은 옷(꾸러미) → 목소리 이름(남자 옷 = kimbiseo_m 등) 또는 null(서버 기본 목소리)
+const wornPack = () => (hasOutfit() ? packOf(S.skin) : null);
+const wornVoice = () => voice.voiceFor(wornPack());
 const speakQueue = [];
 let current = null, speakSeq = 0, httpPort = null;
 const doneWait = new Map();
@@ -385,7 +395,7 @@ async function pump() {
   try {
     const t0 = Date.now();
     let r;
-    try { r = await voice.synth(it.text, it.rate, it.expr); }
+    try { r = await voice.synth(it.text, it.rate, it.expr, wornVoice()); }
     catch (e) {
       if (e.code === 400) throw e;
       log('김비서 목소리 안 됨 → 윈도우 음성: ' + e.message);
@@ -736,8 +746,11 @@ async function autoFirstPack() {
   if (PACKS.length || !AUTO_PACK) return;
   try {
     const list = await remoteList();
-    const p = list.find(x => x.def && x.signed && !x.soon && x.id === CONFIG.default_pack) || list.find(x => x.def && x.signed && !x.soon);
+    const want = wantedPack();   // 본체 설정에서 고른 펫 캐릭터(예: 남자 김비서)가 있으면 그 옷부터
+    const p = (want && list.find(x => x.id === want && x.signed && !x.soon))
+      || list.find(x => x.def && x.signed && !x.soon && x.id === CONFIG.default_pack) || list.find(x => x.def && x.signed && !x.soon);
     if (!p) { log('첫 옷 자동 받기: 목록에 기본 옷 없음'); return; }
+    if (fetching || PACKS.length) return;   // 목록을 읽는 사이 다른 길(본체가 고른 옷 받기)이 먼저 받기 시작함
     log('첫 옷 자동 받기: ' + p.id + ' ' + p.version);
     const r = await fetchPack(p, '첫 실행 자동 받기', true);
     if (!r || !r.ok) autoTimer = setTimeout(autoFirstPack, 60000);
@@ -745,6 +758,42 @@ async function autoFirstPack() {
     log('첫 옷 자동 받기 못 함(1분 뒤 다시): ' + e.message);
     if (e.code !== 'nosource') autoTimer = setTimeout(autoFirstPack, 60000);
   }
+}
+// 본체가 '이 옷을 입어'(/skin)라고 했는데 그 옷이 아직 없을 때: 옷 받기에 동의했으면 옷 목록에서 받아서 입음(정품 서명만)
+function wantedPack() {   // 본체가 방금 고른 옷(/skin — 처음 화면에서 고른 것)이 켤 때 받은 값(--want-pack)보다 새것
+  const w = String(S.wantPack || argVal('want-pack') || '').trim();
+  return packs.ID_RE.test(w) ? w : '';
+}
+// 켤 때: 본체 설정의 펫 캐릭터(--want-pack)가 지난번과 달라졌으면 그 옷을 입음(없으면 옷 받기에 동의했을 때 받아서).
+//   이 기능이 생긴 뒤 처음 켤 때(appliedWant 없음): 이미 있는 옷은 갈아입히지 않음(펫 메뉴에서 고른 옷을 그대로 둠).
+//   다만 설정에서 기본 옷이 아닌 캐릭터(예: 남자 김비서 — 예전 판에서는 '준비 중'이었음)를 골라 두었는데 그 옷이 아직 없으면 받아서 입음.
+function applyWantArg() {
+  const w = String(argVal('want-pack') || '').trim();
+  if (!packs.ID_RE.test(w) || S.appliedWant === w) return;
+  const first = S.appliedWant === null || S.appliedWant === undefined;
+  if (!PACKS.length) { S.appliedWant = w; saveSettings(); return; }   // 옷이 하나도 없으면 autoFirstPack 이 이 옷부터 받음
+  if (PACKS.some(p => p.id === w)) {
+    S.appliedWant = w; saveSettings();
+    if (!first && S.skin !== w) { log('본체 설정의 펫 캐릭터로 갈아입음: ' + w); wear(w); }
+    return;
+  }
+  if (AUTO_PACK && PACK_SOURCE && (!first || w !== CONFIG.default_pack)) { S.wantPack = w; saveSettings(); setTimeout(() => fetchWanted(w), 4000); }
+  else if (first) { S.appliedWant = w; saveSettings(); }
+}
+async function fetchWanted(id) {
+  try {
+    const list = await remoteList();
+    const p = list.find(x => x.id === id && x.signed && !x.soon);
+    if (!p) {   // 옷 목록에 없거나 아직 준비 중 → 켤 때마다 다시 묻지 않게 적어 둠
+      S.wantPack = ''; S.appliedWant = id; saveSettings();
+      notify('그 옷은 아직 받을 수 없어요. 펫 메뉴 「옷 더 받기」를 봐 주세요.', 7); return;
+    }
+    if (PACKS.some(x => x.id === id)) { S.wantPack = ''; S.appliedWant = id; saveSettings(); if (S.skin !== id) wear(id); return; }   // 그 사이 이미 들어옴
+    if (fetching) { if (fetching !== id) setTimeout(() => fetchWanted(id), 5000); return; }   // 다른 옷을 받는 중이면 끝난 뒤 다시, 같은 옷이면 그 받기에 맡김
+    log('본체가 고른 옷 받기: ' + p.id + ' ' + p.version);
+    const r = await fetchPack(p, '본체 설정', true);
+    if (r && r.ok) { S.wantPack = ''; S.appliedWant = id; saveSettings(); }
+  } catch (e) { log('본체가 고른 옷 받기 못 함: ' + e.message); notify('옷을 받지 못했어요: ' + e.message, 7); }
 }
 ipcMain.handle('ward-state', e => (fromWard(e) ? packsState() : null));
 ipcMain.handle('ward-remote', async e => {
@@ -784,7 +833,8 @@ function signalHandlers() {
   return {
     speak, log, packs: () => packsState(),
     status: () => ({ app: '김비서 펫', ...state(), outfits: undefined, packs: PACKS.map(p => p.id + ' ' + p.version + (songsOf(p) ? '' : ' (노래 없음)')),
-      source: PACK_SOURCE || null, gpu: gpuLine(), voice: voice.down ? (tts.voice || '윈도우 음성') : (voice.voiceName || '김비서 목소리') }),
+      source: PACK_SOURCE || null, gpu: gpuLine(), gender: (wornPack() || {}).gender || '', voiceWant: wornVoice() || '',
+      voice: voice.down ? (tts.voice || '윈도우 음성') : (voice.voiceName || '김비서 목소리') }),
     expr: (name, sec, raw) => petSend('expr', { name, sec, raw }),
     dances: () => {   // 지금 입은 옷에서 출 수 있는 춤 [{name, ko}]
       const set = clipsNow();
@@ -795,7 +845,9 @@ function signalHandlers() {
       const set = clipsNow(), ex = exNow();
       const have = Object.keys(MOTION_NAMES.NEED).filter(k => !MOTION_NAMES.resolve(k, n => set.has(n), () => true).missing);
       const pk = packOf(S.skin);
-      return { skin: S.skin, version: pk ? pk.version : '', motions: ex.motions.map(m => ({ name: m.name, ko: m.ko, calls: m.calls, pose: m.pose })),
+      // gender·packVoice = 본체가 옷에 맞는 목소리를 고르는 데 씀(app/pet_link/face.py pet_outfit) · voice = 펫이 같은 표로 고른 이름
+      return { skin: S.skin, version: pk ? pk.version : '', gender: pk ? pk.gender : '', packVoice: pk ? pk.voice : '', voice: wornVoice() || '',
+        motions: ex.motions.map(m => ({ name: m.name, ko: m.ko, calls: m.calls, pose: m.pose })),
         dances: ex.dances.map(d => ({ name: d.name, ko: d.ko, calls: d.calls })), have, variants: ex.variants || {} };
     },
     motion: name => {
@@ -821,7 +873,15 @@ function signalHandlers() {
     },
     skin: (id, temp) => {
       const list = PACKS.map(p => p.id);
-      if (!list.includes(id)) return { ok: false, error: '옷 id: ' + list.join(', ') };
+      if (!list.includes(id)) {
+        // 아직 없는 옷: 옷 받기에 동의했고 옷 목록 주소가 있으면 받아서 입음(본체 처음 화면·설정에서 남자 김비서를 골랐을 때)
+        if (temp || !packs.ID_RE.test(id)) return { ok: false, error: '옷 id: ' + list.join(', ') };
+        if (!AUTO_PACK || !PACK_SOURCE) return { ok: false, missing: true, error: '그 옷이 아직 없어요. 펫 메뉴 「옷 더 받기」에서 받아 주세요.' };
+        if (S.wantPack !== id) { S.wantPack = id; saveSettings(); }
+        if (!fetching) setTimeout(() => fetchWanted(id), 50);
+        return { ok: true, id, fetching: true };
+      }
+      if (!temp && (S.wantPack || S.appliedWant !== id)) { S.wantPack = ''; S.appliedWant = id; saveSettings(); }
       pick('skin', id, temp); return { ok: true, id, saved: !temp };
     },
     mouth: (level, shape) => petSend('mouth', { level, shape }),
@@ -884,6 +944,7 @@ if (!app.requestSingleInstanceLock()) {
     } catch (e) { /* 무시 */ }
     for (const f of addPackArgs(process.argv)) requestInstall(f, '두 번 누르기(켜면서)');
     if (!PACKS.length) setTimeout(autoFirstPack, 3000);
+    applyWantArg();
     try {
       const r = await startServer(signalHandlers(), +CONFIG.port || 17961);
       httpPort = r.port;

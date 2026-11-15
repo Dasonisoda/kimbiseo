@@ -127,7 +127,9 @@ def _tell_pet(keys):
         out["옷받기"] = {"코드": code, **({k: j.get(k) for k in ("ok", "started", "already", "error", "code") if k in j})}
     if "펫.옷" in keys and pc.get("옷"):
         code, j = pet_call(CFG, "/skin", {"id": str(pc["옷"])})
-        out["옷"] = {"코드": code, "ok": j.get("ok"), "error": j.get("error")}
+        out["옷"] = {"코드": code, "ok": j.get("ok"), "error": j.get("error"), **({"받는중": True} if j.get("fetching") else {})}
+        from .pet_link.face import forget_outfit
+        forget_outfit()      # 다음 문장이 바로 새 옷의 목소리를 고르게
     logger.info(f"펫에 알림: {out}")
     return out
 
@@ -722,6 +724,11 @@ def make_app():
             text = C.fill(CFG, "안녕하세요, {이름}입니다. 이 목소리로 말씀드릴게요.")
         req = {"text": text}
         v = (b or {}).get("목소리")
+        if v == "auto":      # '옷에 맞춤(자동)' → 지금 실제로 말할 목소리(펫이 입은 옷 > 펫 성별)
+            from .core import voice_choice
+            from .pet_link.face import pet_outfit
+            outfit = await asyncio.to_thread(pet_outfit, CFG) if PET is not None else None
+            v = voice_choice.voice_for_outfit(outfit) or voice_choice.voice_for_gender((CFG.get("펫") or {}).get("성별"))
         if isinstance(v, str) and re.match(r"^[a-z0-9_]{1,40}$", v):
             req["voice"] = v
         try:

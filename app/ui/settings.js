@@ -106,7 +106,7 @@ const Settings = {
       pet, (v) => { pet = v; }, {wide: true, idp: "set-pet"}));
     s.append(choiceGroup([{값: "여", 이름: "여자"}, {값: "남", 이름: "남자"}], sex, (v) => {
       sex = v; pet = ((ch["성별_추천"] || {})[v] || {})["펫"] || pet; draw();
-    }, {idp: "set-gender"}), list, h("p", {class: "hint", text: "성별을 바꾸면 어울리는 목소리와 말투로 자동으로 바뀌어요(직접 고정한 경우는 그대로). 호칭은 '이름·호칭'에서 바꿔요."}));
+    }, {idp: "set-gender"}), list, h("p", {class: "hint", text: "성별을 바꾸면 어울리는 말투로 바뀌고, 목소리는 펫이 입은 옷에 맞춰 자동으로 바뀌어요(직접 고른 경우는 그대로). 고른 캐릭터의 옷이 아직 없으면 펫이 받아 와요(옷 받기에 동의했을 때). 호칭은 '이름·호칭'에서 바꿔요."}));
     draw();
     s.appendChild(this.saveRow("set-pet-save", () => ({펫: {성별: sex, 옷: pet}})));
   },
@@ -148,15 +148,16 @@ const Settings = {
     s1.append(choiceGroup(ch["목소리_엔진"].map((x) => ({값: x.id, 이름: x["이름"], 설명: x["설명"]})), eng, (v) => { eng = v; }, {wide: true, idp: "set-engine"}),
       this.saveRow("set-engine-save", () => ({목소리: {엔진: eng}})));
     const s2 = this.section(card, "목소리 견본과 빠르기", ["목소리.목소리", "목소리.말속도"]);
-    let voice = get(c, "목소리.목소리", "kimbiseo"), speed = get(c, "목소리.말속도", 1.0);
+    let voice = get(c, "목소리.목소리", "auto"), speed = get(c, "목소리.말속도", 1.0);
     const st = h("p", {class: "hint", id: "set-voice-status"});
-    s2.append(choiceGroup(ch["목소리"].map((x) => ({값: x.id, 이름: x["이름"] + (x["준비"] ? "" : " (준비 중)"), 막음: !x["준비"]})), voice, (v) => { voice = v; }, {idp: "set-voice"}),
+    s2.append(choiceGroup(ch["목소리"].map((x) => ({값: x.id, 이름: x["이름"] + (x["준비"] ? "" : " (준비 중)"), 설명: x["설명"], 막음: !x["준비"]})), voice, (v) => { voice = v; }, {wide: true, idp: "set-voice"}),
       h("p", {class: "big-q", text: "말 빠르기"}),
       choiceGroup(ch["말속도"].map((x) => ({값: x, 이름: x === 1 ? "보통" : x + "배"})), speed, (v) => { speed = v; }, {idp: "set-speed"}),
       h("div", {class: "row"}, h("button", {class: "btn", type: "button", id: "set-voice-play", text: "들어 보기", onclick: () => playSample(voice, st)})), st);
     const vh = get(c, "목소리.해석", null);
     if (vh && vh["대체"] && vh["이유"]) s2.append(notice("warn", "목소리 참고음성이 아직 없어요", vh["이유"]));
-    else if (vh && vh["자동"]) s2.append(h("p", {class: "hint", text: "지금은 펫 성별에 맞춰 목소리를 자동으로 고르고 있어요. 목소리를 직접 저장하면 그때부터 고정돼요."}));
+    else if (vh && vh["자동"]) s2.append(h("p", {class: "hint", text: "지금은 펫이 입은 옷(펫이 꺼져 있으면 펫 성별)에 맞춰 목소리를 자동으로 고르고 있어요. 다른 목소리를 골라 저장하면 그 목소리로 고정돼요."}));
+    else if (vh && vh["고정"]) s2.append(h("p", {class: "hint", text: "지금은 고른 목소리로 고정돼 있어요. '옷에 맞춤(자동)'을 고르면 펫 옷을 갈아입을 때 목소리도 같이 바뀌어요."}));
     s2.append(this.saveRow("set-voice-save", () => ({목소리: {목소리: voice, 말속도: speed}})));
     const s3 = this.section(card, "받아쓰기(귀) 장치", ["귀.장치"]);
     let ear = get(c, "귀.장치", "auto");

@@ -142,7 +142,7 @@ def test_choices_offer_both_voices():
     assert voices["kimbiseo"]["이름"] == "김비서(여)", voices["kimbiseo"]
     assert voices["kimbiseo_m"]["이름"] == "김비서(남)", voices["kimbiseo_m"]
     assert voices["kimbiseo"]["준비"] is True and voices["kimbiseo_m"]["준비"] is True, voices
-    assert [x["id"] for x in ch["목소리"] if x["준비"]] == ["kimbiseo", "kimbiseo_m"], ch["목소리"]
+    assert [x["id"] for x in ch["목소리"] if x["준비"]] == ["auto", "kimbiseo", "kimbiseo_m"], ch["목소리"]   # auto = 옷에 맞춤(자동)
 
     for name, sex in (("kimbiseo", "남"), ("kimbiseo_m", "여")):
         cfg, p, logs = fresh_cfg({"펫": {"성별": sex}})

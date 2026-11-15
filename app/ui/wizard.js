@@ -80,7 +80,7 @@ const Wizard = {
       비서: {이름: get(c, "비서.이름", "김비서"), 별칭: get(c, "비서.별칭", [])},
       사용자: {호칭: get(c, "사용자.호칭", ""), 기본장소: get(c, "사용자.기본장소", "서울")},
       두뇌: brainDraftFrom(c),
-      목소리: {엔진: get(c, "목소리.엔진", "qwen"), 목소리: get(c, "목소리.목소리", "kimbiseo"), 말속도: get(c, "목소리.말속도", 1.0)},
+      목소리: {엔진: get(c, "목소리.엔진", "qwen"), 목소리: get(c, "목소리.목소리", "auto"), 말속도: get(c, "목소리.말속도", 1.0)},
       화면: {마이크: get(c, "화면.마이크", ""), 마이크_이름: get(c, "화면.마이크_이름", ""), 스피커: get(c, "화면.스피커", ""), 스피커_이름: get(c, "화면.스피커_이름", "")},
       대화: {이름부르기: get(c, "대화.이름부르기", false)},
       귀: {},
@@ -167,17 +167,14 @@ const Wizard = {
       this.d.펫.성별 = v;
       const r = ch["성별_추천"][v] || {};
       if (r["펫"]) this.d.펫.옷 = r["펫"];
-      const vi = ch["목소리"].find((x) => x.id === r["목소리"]);
-      this.d.목소리.목소리 = vi && vi["준비"] ? vi.id : (ch["목소리"].find((x) => x["준비"]) || {}).id || "kimbiseo";
-      this.d.목소리.원하는 = r["목소리"];
       draw();
     }, {idp: "wz-gender", label: "펫 성별"}));
-    b.append(pets, info, h("p", {class: "hint", text: "성별을 고르면 어울리는 목소리를 미리 골라 둬요. 나를 부르는 말(호칭)은 다음 화면에서 직접 골라요."}));
+    b.append(pets, info, h("p", {class: "hint", text: "목소리는 펫이 입은 옷에 맞춰 자동으로 바뀌어요(목소리 화면에서 직접 고를 수도 있어요). 나를 부르는 말(호칭)은 다음 화면에서 직접 골라요."}));
     draw();
     // 옷 받기 동의 — 펫의 옷(영상 꾸러미)은 프로그램 안에 없어서 인터넷에서 받아야 함. 고르기 전에는 다음으로 못 감.
     const src = get(K.cfg, "펫.옷목록_주소", "");
     b.append(h("p", {class: "big-q", text: "펫 옷을 지금 받을까요?"}),
-      choiceGroup([{값: true, 이름: "받을게요", 설명: "기본 옷(김비서 — 춤은 소리 없이) 약 170MB 를 인터넷에서 받아요"},
+      choiceGroup([{값: true, 이름: "받을게요", 설명: "고른 캐릭터의 기본 옷(춤은 소리 없이) 약 150~170MB 를 인터넷에서 받아요"},
         {값: false, 이름: "나중에", 설명: "펫 메뉴의 '옷 더 받기'에서 언제든 받을 수 있어요"}],
       this.d.펫.옷_받기, (v) => { this.d.펫.옷_받기 = v; }, {wide: true, idp: "wz-pack"}),
       src ? h("p", {class: "hint", text: "받는 곳: " + src}) : notice("warn", "옷 받는 곳이 아직 정해지지 않았어요", "'받을게요'를 골라 두면 받는 곳이 정해진 뒤 펫이 저절로 받아요. 옷 파일이 있으면 펫 메뉴에서 '파일로 옷 추가'로 넣을 수 있어요."));
@@ -243,6 +240,12 @@ const Wizard = {
     return brainPack(this.d.두뇌);
   },
 
+  // '들어 보기'에 쓸 목소리 — '옷에 맞춤(자동)'이면 아직 저장 전이라 지금 고른 펫 성별에 어울리는 목소리로 들려줌
+  sampleVoice() {
+    const v = this.d.목소리.목소리;
+    return v === "auto" ? ((K.choices["성별_추천"][this.d.펫.성별] || {})["목소리"] || "kimbiseo") : v;
+  },
+
   // 4. 목소리
   s4(b) {
     const ch = K.choices;
@@ -257,13 +260,12 @@ const Wizard = {
       this.d.목소리.엔진, (v) => { this.d.목소리.엔진 = v; drawWarn(); }, {wide: true, idp: "wz-engine"}));
     b.appendChild(warn);
     b.append(h("p", {class: "big-q", text: "목소리 견본"}),
-      choiceGroup(ch["목소리"].map((x) => ({값: x.id, 이름: x["이름"] + (x["준비"] ? "" : " (준비 중)"), 막음: !x["준비"]})), this.d.목소리.목소리,
-        (v) => { this.d.목소리.목소리 = v; }, {idp: "wz-voice"}));
-    if (this.d.목소리.원하는 && this.d.목소리.원하는 !== this.d.목소리.목소리) b.appendChild(notice("", "", "고른 펫에 어울리는 목소리는 준비 중이라 지금은 준비된 목소리로 말해요."));
+      choiceGroup(ch["목소리"].map((x) => ({값: x.id, 이름: x["이름"] + (x["준비"] ? "" : " (준비 중)"), 설명: x["설명"], 막음: !x["준비"]})), this.d.목소리.목소리,
+        (v) => { this.d.목소리.목소리 = v; }, {wide: true, idp: "wz-voice"}));
     b.append(h("p", {class: "big-q", text: "말 빠르기"}),
       choiceGroup(ch["말속도"].map((x) => ({값: x, 이름: x === 1 ? "보통" : x + "배"})), this.d.목소리.말속도, (v) => { this.d.목소리.말속도 = v; }, {idp: "wz-speed"}));
     const st = h("p", {class: "hint", id: "wz-voice-status"});
-    b.append(h("div", {class: "row"}, h("button", {class: "btn primary", type: "button", id: "wz-voice-play", text: "들어 보기", onclick: () => playSample(this.d.목소리.목소리, st)})), st);
+    b.append(h("div", {class: "row"}, h("button", {class: "btn primary", type: "button", id: "wz-voice-play", text: "들어 보기", onclick: () => playSample(this.sampleVoice(), st)})), st);
     drawWarn();
   },
 
@@ -314,7 +316,7 @@ const Wizard = {
     const st = h("p", {class: "hint", id: "wz-spk-status"});
     b.append(h("div", {class: "row"}, h("button", {class: "btn primary", type: "button", id: "wz-mic-open", text: "마이크 켜기", onclick: open})),
       aec, meter, field("마이크", micSel), h("div", {class: "row"}, h("button", {class: "btn", type: "button", id: "wz-mic-test", text: "마이크 시험(말해 보기)", onclick: test})), heard,
-      field("스피커", spkSel), h("div", {class: "row"}, h("button", {class: "btn", type: "button", id: "wz-spk-test", text: "스피커 시험", onclick: () => playSample(this.d.목소리.목소리, st, spkSel.value)})), st);
+      field("스피커", spkSel), h("div", {class: "row"}, h("button", {class: "btn", type: "button", id: "wz-spk-test", text: "스피커 시험", onclick: () => playSample(this.sampleVoice(), st, spkSel.value)})), st);
     fill();
     open();
   },

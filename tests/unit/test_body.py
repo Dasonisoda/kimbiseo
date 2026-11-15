@@ -222,6 +222,7 @@ def test_voice_waits_engine_loading():
         port = srv.sockets[0].getsockname()[1]
         c = cfg(포트={"목소리": port}, 목소리={"엔진_기다림_초": 10})
         link = voice_link.VoiceLink(c)
+        link.voice = None      # voice 를 보냈다가 500 이면 기본 목소리로 한 번 더 묻는다(test_voice_outfit) — 여기서는 기다림만 본다
         evs = [ev async for ev, _ in link.speak("안녕하세요")]
         srv.close()
         return hits, evs, link

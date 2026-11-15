@@ -75,7 +75,7 @@ def _user_voice(user):
     if not isinstance(user, dict):
         return None
     v = (user.get("목소리") or {}).get("목소리")
-    return v if isinstance(v, str) and v.strip() else None
+    return v if isinstance(v, str) and v.strip() and v.strip() != "auto" else None   # "auto" = 직접 고르지 않음(옷·성별에 맞춤)
 
 
 def _asset_problem(name, reg):
@@ -105,7 +105,8 @@ def _asset_problem(name, reg):
 
 
 def resolve_voice(cfg, user=None, log=None):
-    """사용자 설정에 '목소리.목소리' 가 있으면 고정, 없으면 펫.성별 로 고른다.
+    """사용자 설정에 '목소리.목소리' 가 있으면 고정, 없으면("auto" 포함) 펫.성별 로 고른다.
+    (펫이 입은 옷에 맞춘 목소리는 본체·펫이 요청마다 "voice" 로 보낸다 — 여기서 정하는 것은 서버의 기본 목소리.)
     고른 목소리의 참고음성이 없으면 기본목소리로 대체하고 한 줄 남긴다(서버가 윈도우 음성으로
     넘어가지 않게, 기본목소리는 그대로 쓸 수 있게). 목소리 서버는 요청마다 voice 를 받으므로
     실행 중 성별이 바뀌어도 이 값은 다음에 서버를 켤 때 반영된다."""

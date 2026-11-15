@@ -4,6 +4,7 @@ import asyncio
 import importlib.util
 import json
 import os
+import time
 import uuid
 
 from loguru import logger
@@ -81,17 +82,23 @@ class VoiceLink:
         self.port = int(cfg["포트"]["목소리"])
         self.session = "kimbiseo-" + uuid.uuid4().hex[:10]
         self.pace = float((cfg.get("목소리") or {}).get("앞서가기_초", 2.5))
-        self.voice = (cfg.get("목소리") or {}).get("목소리") or None
+        self.voice = (cfg.get("목소리") or {}).get("목소리") or None   # 문장마다 tts.VoiceTTS 가 다시 정함(옷·성별)
+        self._bad = {}          # 목소리 서버가 거절한 voice 이름 → 다시 써 볼 시각(5분 뒤)
         self._reset = True
         self.on_yawn = on_yawn
+
+    def bad_voices(self):
+        now = time.time()
+        return {n for n, t in self._bad.items() if t > now}
 
     async def speak(self, text, speed=1.0):
         # 앱을 막 켰을 때 목소리 서버는 떠 있어도 엔진(Qwen)을 아직 읽는 중이면 503 '엔진 준비 중' → 오류 대신 기다렸다 다시(최대 목소리.엔진_기다림_초).
         wait = float((self.cfg.get("목소리") or {}).get("엔진_기다림_초", 90) or 90)
         t_end = asyncio.get_running_loop().time() + wait
         reset = self._reset
+        voice = self.voice if self.voice not in self.bad_voices() else None
         while True:
-            agen = self._speak_once(text, speed)
+            agen = self._speak_once(text, speed, voice)
             retry = False
             try:
                 first = True
@@ -101,7 +108,14 @@ class VoiceLink:
                         err = str(ev.get("error") or "")
                         if (ev.get("type") == "end" and "503" in err and "엔진 준비 중" in err
                                 and asyncio.get_running_loop().time() < t_end):
-                            retry = True
+                            retry = "wait"
+                            break
+                        if ev.get("type") == "end" and voice and (ev.get("code") == 500 or (ev.get("code") == 400 and "voice" in err)):
+                            # 서버가 그 목소리를 모르거나 못 올림 → 그 이름은 5분 쉬고 이 문장은 기본 목소리로 다시(말이 빠지지 않게)
+                            self._bad[voice] = time.time() + 300
+                            logger.warning(f"목소리 서버가 voice {voice} 거절({err[:80]}) → 기본 목소리로 다시")
+                            voice = None
+                            retry = "voice"
                             break
                     yield ev, pcm
             finally:
@@ -109,13 +123,14 @@ class VoiceLink:
             if not retry:
                 return
             self._reset = reset
-            logger.info("목소리 엔진 준비 중 — 1초 뒤 다시")
-            await asyncio.sleep(1.0)
+            if retry == "wait":
+                logger.info("목소리 엔진 준비 중 — 1초 뒤 다시")
+                await asyncio.sleep(1.0)
 
-    async def _speak_once(self, text, speed=1.0):
+    async def _speak_once(self, text, speed=1.0, voice=None):
         req = {"text": text, "raw": True, "session": self.session, "pace": self.pace, "emotion": "기본"}
-        if self.voice:
-            req["voice"] = self.voice
+        if voice:
+            req["voice"] = voice
         if speed and abs(float(speed) - 1.0) > 1e-3:
             req["speed"] = float(speed)
             req["apply_speed"] = True
@@ -163,7 +178,7 @@ class VoiceLink:
                 if code == 400 and "읽을 글" in str(j.get("error", "")):
                     yield {"type": "end"}, None
                 else:
-                    yield {"type": "end", "error": f"목소리 서버 {code}: {j.get('error') or raw[:80]!r}"}, None
+                    yield {"type": "end", "code": code, "error": f"목소리 서버 {code}: {j.get('error') or raw[:80]!r}"}, None
                 return
             yield {"type": "head", "speed_applied": headers.get("x-speed-applied") == "1",
                    "engine": headers.get("x-engine", "")}, None
