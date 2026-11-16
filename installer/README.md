@@ -35,6 +35,31 @@
 
 엔비디아 드라이버 580 이상이면 llama.cpp CUDA 13 판, 그보다 옛것이면 CUDA 12 판. 디스크가 모자라면 시작 전에 멈춥니다.
 
+## 받기가 안 될 때(0.1.12~)
+
+설치 때 받는 것은 전부 `get_models.download()` 를 지납니다.
+
+- **이어 받기·다시 시도**: 끊기면 받은 만큼(`.part`)에서 이어 받습니다. 받아지는 동안은 계속 잇고(기다림 2·4·8…초),
+  거의 못 받은 시도가 5번 이어지면 그만둡니다. `429`(잠시 뒤 다시)는 서버가 말한 만큼 기다립니다.
+- **윈도우 내려받기로 대신 받기**: 파이썬으로 안 되면 윈도우에 든 `curl.exe`, 그것도 안 되면 파워셸(`Invoke-WebRequest`)로 받습니다
+  (받은 뒤 sha256 으로 확인하는 파일만). 인증서 확인 실패는 다시 해도 같으므로 바로 넘어갑니다.
+  까닭: 파이썬은 윈도우 인증서 저장소에 **이미 있는** 뿌리 인증서만 읽는데, 윈도우는 뿌리 인증서를 처음 쓸 때 받아 넣습니다.
+  깃허브 쪽 뿌리(USERTrust ECC · ISRG Root X1)를 아직 받은 적 없는 PC 에서는 파이썬만 `CERTIFICATE_VERIFY_FAILED` 로 실패합니다
+  — 두뇌를 구독(클로드 코드·Codex)으로 쓰는 PC 는 깃허브에서 받는 첫 단계가 '펫'이라, 0.1.11 까지는 그 단계에서 설치가 멈췄습니다.
+  프록시 자동 설정(PAC)·보안 프로그램 때문에 파이썬 연결만 막힌 PC 도 이 길로 받습니다.
+- **깨진 파일**: 받은 파일이 원본과 다르면(sha256) 지우고 한 번은 저절로 새로 받습니다.
+- **실패 안내**: 원인(인증서·주소를 못 찾음·응답 없음·끊김·막힘·거절 403·없음 404·디스크·파일 쓰기)을 쉬운 말로 보여 주고,
+  `install.log` 에 `진단:` 줄(윈도우 판·원인·써 본 방식·프록시 설정 여부·curl 유무·디스크 여유·받는 곳 이름)을 남깁니다.
+- **'펫' 단계는 실패해도 설치를 끝냅니다**: 김비서(대화)는 먼저 쓰고, 펫은 나중에 넣습니다.
+  설치 창에 '펫 다시 설치' · '받아 둔 파일로'(브라우저로 직접 받은 압축 파일을 고름 — 크기·sha256 이 맞아야 씀) ·
+  '직접 받을 주소 복사' · '기록 폴더 열기' 가 생기고, 김비서 설정 → 펫 → '펫 프로그램' 에도 같은 단추가 있습니다.
+  둘 다 `setup_core.py pet-install [--file <압축 파일>]` 을 부릅니다.
+- 문제 해결용 환경변수 `KIMBISEO_DOWNLOADER` = `python` | `curl` | `powershell` 로 받는 방식을 하나로 정할 수 있습니다.
+- 깃허브에서 받는 주소는 모두 고정 주소(`releases/download/<판>/<파일>` · `raw.githubusercontent.com`)라 깃허브 API 의
+  시간당 횟수 제한(로그인 없이 60번)에 걸리지 않습니다.
+
+펫 옷(첫 실행 때 약 150~170MB)도 0.1.12 부터 끊기면 이어 받고 다시 시도합니다(`pet/packs.js download`).
+
 ## 받는 곳(정해 둔 https 호스트만)
 
 www.python.org · files.pythonhosted.org · download.pytorch.org(download-r2) · github.com(+githubusercontent) · huggingface.co(+hf.co) ·
@@ -50,6 +75,8 @@ python installer/setup_core.py install --prefix <폴더> --data <폴더> --statu
 python installer/get_models.py list | get [--all] | check <모델>
 python installer/make_lock.py requirements/app.txt locks/app.json      # 잠금 다시 만들기(받지 않음, pip --dry-run)
 python -m tests.unit.test_installer                        # 단위 시험(받기·설치 없음)
+python -m tests.unit.test_install_download                 # 받기 단위 시험(이 PC 안 임시 서버가 끊고·거절하고·깨진 파일을 줌)
+python installer/setup_core.py pet-install --prefix <폴더> --data <폴더> [--file <받아 둔 electron zip>]   # 펫 실행 틀만 다시
 ```
 
 설치하면: `<설치 폴더>`(기본 `%LOCALAPPDATA%\KimBiseo`) = 프로그램·파이썬·모델·두뇌 프로그램·펫 틀 ·

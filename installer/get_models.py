@@ -6,6 +6,8 @@
 #   공통: --dest <모델 폴더>(기본 = 설정 '경로.모델', %LOCALAPPDATA%\KimBiseo\models) · --settings <설정.json> · --json
 #
 # - 이어 받기: 받는 중인 파일은 <파일>.part 로 두고, 끊기면 다음에 이어서 받음(서버가 Range 를 받으면).
+# - 다시 시도: 조금이라도 더 받아지는 동안은 계속 이어 받음(기다림 2·4·8…초). 파이썬으로 안 되면(인증서 확인 실패·프록시 자동 설정 등)
+#   해시로 확인하는 파일에 한해 윈도우에 든 내려받기(curl.exe → 파워셸)로 대신 받음. 실패하면 원인 종류를 가려 쉬운 말로 알림(WHY).
 # - 확인: 크기 + sha256(큰 파일) 또는 git_sha1(작은 파일, git blob 해시). 공식 해시가 빈 칸인 파일은
 #         '설치 때 확인' — 크기만 보고 받은 뒤 계산한 sha256 을 보여 주고, --allow-unverified 없이는 받지 않음.
 # - 받는 주소: https 만, 정해 둔 곳(huggingface.co·hf.co·github.com 과 그 내려받기 서버)만 따라감.
@@ -159,68 +161,301 @@ def base_url(m):
     return u
 
 
-def download(url, dest, size=None, tries=5, say=print, progress=None, hosts=None):
+# ---------------------------------------------------------------- 받기(이어 받기·다시 시도·원인 가려내기·윈도우 내려받기로 대신 받기)
+TIMEOUT = 60              # 한 번 읽기를 기다리는 초(그동안 아무것도 안 오면 끊고 이어서 다시)
+NO_PROGRESS_TRIES = 5     # 거의 못 받은 시도가 이만큼 이어지면 그만둠(받아지는 동안은 계속 이어 받음)
+MIN_GAIN = 128 * 1024     # 한 번 시도에 이만큼은 더 받아야 '받아지는 중'으로 봄(100KB 받고 멈추는 회선에서 끝없이 돌지 않게)
+MAX_TRIES = 60            # 그래도 끝없이 돌지 않게 하는 상한
+BACKOFF_MAX = 30          # 다시 시도 사이 기다림(2, 4, 8 … 초)의 상한
+RENAME_TRIES = 40         # 다 받은 파일 이름 바꾸기 — 백신이 방금 받은 파일을 검사하느라 잠깐 잡고 있으면 0.5초씩 기다렸다 다시
+NATIVE_ENV = "KIMBISEO_DOWNLOADER"    # 문제 해결용: python | curl | powershell 중 하나로 받는 방식을 정함(없으면 차례로)
+
+# 원인 종류 → 사용자에게 보여 줄 쉬운 말(설치 창·기록에 그대로 나감)
+WHY = {
+    "tls": "이 PC 의 인증서 목록으로는 내려받는 곳을 믿을 수 있는지 확인하지 못했어요(윈도우 인증서가 아직 갱신되지 않았거나, 백신·회사망이 보안 연결을 검사하는 경우).",
+    "dns": "내려받는 곳의 주소를 찾지 못했어요(인터넷 연결이나 DNS 문제).",
+    "timeout": "내려받는 곳이 응답하지 않거나 너무 느려요.",
+    "reset": "받는 도중에 연결이 끊겼어요.",
+    "blocked": "이 PC 나 공유기·회사망이 내려받는 곳으로 가는 길을 막고 있어요(방화벽·백신).",
+    "http403": "내려받는 곳이 요청을 거절했어요(403) — 회사·학교망 차단이거나 잠깐의 접속 제한일 수 있어요.",
+    "http404": "내려받을 파일이 그 주소에 없어요(404) — 새 설치 파일을 받아 주세요.",
+    "http429": "내려받는 곳이 '잠시 뒤에 다시'라고 했어요(접속이 몰림).",
+    "http5xx": "내려받는 곳 서버에 잠깐 문제가 있어요.",
+    "redirect": "허용하지 않은 주소로 넘겨져서 멈췄어요(회사망·보안 프로그램이 주소를 바꾸는 경우).",
+    "short": "받다가 끊겨 파일이 다 오지 않았어요.",
+    "file": "받은 파일을 디스크에 쓰지 못했어요(백신이 막았거나 폴더에 쓸 수 없음).",
+    "net": "인터넷 연결에 문제가 있어요.",
+}
+
+
+class DownloadError(RuntimeError):
+    """받기 실패 — kind(원인 종류) · why(쉬운 말) · detail(기술 내용) · tried(써 본 방식들)."""
+
+    def __init__(self, kind, detail="", tried=()):
+        self.kind = kind if kind in WHY else "net"
+        self.why = WHY[self.kind]
+        self.detail = str(detail)[:600]
+        self.tried = list(tried)
+        super().__init__(f"{self.why} — {self.detail}" + (f" (써 본 방식: {', '.join(self.tried)})" if self.tried else ""))
+
+
+def classify(ex):
+    """예외 → 원인 종류(WHY 의 열쇠)."""
+    import socket
+    import ssl
+    reason = getattr(ex, "reason", None)
+    text = f"{type(ex).__name__} {ex} {reason if reason is not None else ''}".lower()
+    if isinstance(ex, urllib.error.HTTPError):
+        c = ex.code
+        return "http403" if c in (401, 403, 407) else "http404" if c in (404, 410) else "http429" if c == 429 else "http5xx" if c >= 500 else "net"
+    for e in (ex, reason):
+        if isinstance(e, ssl.SSLCertVerificationError):
+            return "tls"
+    if "certificate_verify_failed" in text or "certificate verify failed" in text:
+        return "tls"
+    if isinstance(ex, ssl.SSLError) or isinstance(reason, ssl.SSLError):
+        return "tls" if "cert" in text else "reset"
+    if "허용하지 않은 주소" in text:
+        return "redirect"
+    if isinstance(reason, socket.gaierror) or isinstance(ex, socket.gaierror) or "getaddrinfo" in text or "11001" in text:
+        return "dns"
+    if isinstance(ex, (TimeoutError, socket.timeout)) or isinstance(reason, (TimeoutError, socket.timeout)) or "timed out" in text:
+        return "timeout"
+    if isinstance(ex, (ConnectionResetError, ConnectionAbortedError)) or isinstance(reason, (ConnectionResetError, ConnectionAbortedError)) \
+            or "10054" in text or "10053" in text or "incompleteread" in text or "connection broken" in text:
+        return "reset"
+    if isinstance(ex, ConnectionRefusedError) or isinstance(reason, ConnectionRefusedError) or any(c in text for c in ("10061", "10013", "10065", "10051", "10060")):
+        return "blocked" if "10060" not in text else "timeout"
+    if "받은 크기가 모자람" in text:
+        return "short"
+    return "net"
+
+
+def _disk_full(ex):
+    return isinstance(ex, OSError) and (getattr(ex, "errno", 0) == 28 or getattr(ex, "winerror", 0) in (39, 112))
+
+
+def _replace(src, dst, say=print):
+    """os.replace — 백신·색인이 방금 쓴 파일을 잠깐 잡고 있으면(권한 없음·다른 프로그램이 사용 중) 조금씩 기다렸다 다시."""
+    for i in range(RENAME_TRIES):
+        try:
+            os.replace(src, dst)
+            return
+        except PermissionError as ex:
+            if i == RENAME_TRIES - 1:
+                raise
+            if i in (0, 10):
+                say(f"    {os.path.basename(dst)}: 파일이 잠깐 잡혀 있음({ex.__class__.__name__}) — 기다렸다 다시")
+            time.sleep(0.5)
+
+
+def _part_size(part):
+    try:
+        return os.path.getsize(part)
+    except OSError:
+        return 0
+
+
+def _fetch_python(opener, url, part, size, say, progress, dest):
+    """파이썬으로 한 번 받기(이어 받기). → (다 받았나, 알게 된 전체 크기). 실패는 예외."""
+    have = _part_size(part)
+    if size is not None and have > size:
+        os.remove(part)
+        have = 0
+    if size is not None and have == size:
+        return True, size
+    req = urllib.request.Request(url, headers={"User-Agent": UA, **({"Range": f"bytes={have}-"} if have else {})})
+    with opener.open(req, timeout=TIMEOUT) as r:
+        if have and r.status != 206:      # 이어 받기를 안 받는 서버 → 처음부터
+            have = 0
+        if size is None:
+            cr = r.headers.get("Content-Range", "")
+            tail = cr.rsplit("/", 1)[-1] if "/" in cr else ""
+            if tail.isdigit():
+                size = int(tail)
+            elif r.headers.get("Content-Length", "").isdigit():
+                size = int(r.headers["Content-Length"]) + have
+        t0, last, got0 = time.time(), 0, have
+        with open(part, "ab" if have else "wb") as f:
+            while True:
+                b = r.read(CHUNK)
+                if not b:
+                    break
+                f.write(b)
+                have += len(b)
+                if time.time() - last > 1:
+                    last = time.time()
+                    rate = (have - got0) / max(1e-6, time.time() - t0)
+                    if progress:
+                        progress(have, size, rate)
+                    else:
+                        say(f"    {os.path.basename(dest)} {human(have)} / {human(size)} ({human(rate)}/초)")
+    if size is None or have == size:
+        return True, have
+    raise OSError(f"받은 크기가 모자람({have}/{size})")
+
+
+def _watch(proc, part, size, progress, t0, have0):
+    """바깥 프로그램(curl·powershell)이 받는 동안 파일 크기로 진행을 알림. 끝나면 종료 코드."""
+    last = 0
+    while proc.poll() is None:
+        time.sleep(0.5)
+        if progress and time.time() - last > 1:
+            last = time.time()
+            have = _part_size(part)
+            progress(have, size, (have - have0) / max(1e-6, time.time() - t0))
+    return proc.returncode
+
+
+def _fetch_curl(url, part, size, say, progress):
+    """윈도우에 든 curl.exe(윈도우 인증서·보안 연결을 그대로 씀)로 이어 받기. → (다 받았나, 이유)."""
+    import shutil
+    import subprocess
+    exe = os.path.join(os.environ.get("SystemRoot", r"C:\Windows"), "System32", "curl.exe")
+    if not os.path.isfile(exe):
+        exe = shutil.which("curl.exe") or ""
+    if not exe:
+        return False, "curl.exe 없음"
+    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    base = [exe, "--location", "--fail", "--silent", "--show-error", "--max-redirs", "5", "--proto", "=https", "--proto-redir", "=https",
+            "--connect-timeout", "30", "--speed-limit", "1024", "--speed-time", str(TIMEOUT), "--user-agent", UA, "--output", part]
+    extra = ["--ssl-revoke-best-effort"]            # 인증서 폐기 목록을 못 받아도(회사망·방화벽) 멈추지 않게 — 옛 curl 은 이 옵션을 모름
+    why, stuck = "", 0
+    for _round in range(8):
+        have0 = _part_size(part)
+        if size is not None and have0 == size:
+            return True, ""
+        if size is not None and have0 > size:
+            os.remove(part)
+            have0 = 0
+        cmd = base + extra + (["--continue-at", "-"] if have0 else []) + [url]
+        p = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, creationflags=flags)
+        rc = _watch(p, part, size, progress, time.time(), have0)
+        err = (p.stderr.read() or b"").decode("utf-8", "replace").strip()[-300:]
+        have = _part_size(part)
+        if rc == 0 and (size is None or have == size):
+            return True, ""
+        why = f"curl 종료 코드 {rc} {err}"
+        say(f"    윈도우 내려받기(curl) {why[:200]} · 받은 것 {human(have)}")
+        if rc == 2 and extra:                       # 모르는 옵션(옛 curl) → 옵션 빼고 다시
+            extra = []
+            continue
+        if rc == 33:                                # 이어 받기를 안 받는 서버 → 처음부터
+            try:
+                os.remove(part)
+            except OSError:
+                pass
+            continue
+        if rc == 23:                                # 디스크에 못 씀
+            raise OSError(28, "디스크에 쓰지 못함(curl 23)")
+        if rc in (22, 60, 35, 77, 6, 7) and have <= have0:      # 거절·인증서·연결 자체가 안 됨 → 되풀이해도 같음
+            return False, why
+        stuck = 0 if have - have0 >= MIN_GAIN else stuck + 1
+        if stuck >= 3:
+            return False, why
+        time.sleep(min(BACKOFF_MAX, 2 ** (stuck + 1)))
+    return False, why
+
+
+def _fetch_powershell(url, part, size, say, progress):
+    """윈도우 파워셸의 Invoke-WebRequest(윈도우 인증서·프록시 자동 설정을 그대로 씀)로 받기 — 이어 받기는 안 됨. → (다 받았나, 이유)."""
+    import subprocess
+    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    ps = ("$ProgressPreference='SilentlyContinue';$ErrorActionPreference='Stop';"
+          "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12;"
+          "Invoke-WebRequest -UseBasicParsing -Uri $env:K_URL -OutFile $env:K_OUT -UserAgent $env:K_UA")
+    why = ""
+    for _round in range(2):
+        try:
+            os.remove(part)
+        except OSError:
+            pass
+        try:
+            p = subprocess.Popen(["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", ps],
+                                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, creationflags=flags,
+                                 env={**os.environ, "K_URL": url, "K_OUT": part, "K_UA": UA})
+        except OSError as ex:
+            return False, f"powershell 을 못 켬({ex.__class__.__name__})"
+        rc = _watch(p, part, size, progress, time.time(), 0)
+        err = (p.stderr.read() or b"").decode("utf-8", "replace").strip()[-300:]
+        have = _part_size(part)
+        if rc == 0 and have and (size is None or have == size):
+            return True, ""
+        why = f"powershell 종료 코드 {rc} {err}"
+        say(f"    윈도우 내려받기(파워셸) {why[:200]} · 받은 것 {human(have)}")
+        time.sleep(3)
+    return False, why
+
+
+def download(url, dest, size=None, tries=None, say=print, progress=None, hosts=None, native=False):
     """url → dest. size 를 모르면 None(서버가 알려 준 길이로). 받는 중엔 dest.part, 끊기면 이어서 받음.
-    progress(받은 바이트, 전체 바이트|None, 초당 바이트) · hosts = 허용 호스트 목록(기본 ALLOWED_HOSTS)."""
+    progress(받은 바이트, 전체 바이트|None, 초당 바이트) · hosts = 허용 호스트 목록(기본 ALLOWED_HOSTS).
+    다시 시도: 받아지는 동안(한 번에 MIN_GAIN 넘게)은 계속 이어 받고(기다림 2·4·8…초), 거의 못 받은 시도가 NO_PROGRESS_TRIES 번
+              (tries 를 주면 그 수) 이어지면 그만둔다.
+    native=True(받은 뒤 부르는 쪽이 sha256 으로 확인하는 파일만): 파이썬으로 안 되면 윈도우 내려받기(curl.exe → 파워셸)로 대신 받는다.
+      - 인증서 확인 실패는 다시 해도 같으므로 바로 넘어간다. 파이썬은 윈도우 인증서 저장소에 '이미 있는' 뿌리 인증서만 읽는데,
+        윈도우는 뿌리 인증서를 처음 쓸 때 받아 넣는다 → 깃허브 쪽 뿌리를 아직 받은 적 없는 PC 에서는 파이썬만 실패한다(0.1.11 까지의 '펫' 단계 멈춤).
+      - 프록시 자동 설정(PAC)·보안 프로그램 때문에 파이썬 연결만 막힌 PC 도 이 길로 받는다.
+    실패하면 DownloadError(원인 종류·쉬운 말·기술 내용). 디스크가 꽉 찼으면 OSError(28)."""
     if not host_ok(url, hosts):
-        raise RuntimeError(f"허용하지 않은 주소: {url}")
+        raise DownloadError("redirect", f"허용하지 않은 주소: {url}")
     opener = urllib.request.build_opener(_redirect_for(hosts)) if hosts else OPENER
     part = dest + ".part"
     os.makedirs(os.path.dirname(dest), exist_ok=True)
-    last_err = ""
+    forced = (os.environ.get(NATIVE_ENV) or "").strip().lower()
+    limit = int(tries) if tries else NO_PROGRESS_TRIES
+    tried, last_kind, last_err = [], "net", ""
     done = False
-    for attempt in range(1, tries + 1):
-        have = os.path.getsize(part) if os.path.exists(part) else 0
-        if size is not None and have > size:
-            os.remove(part)
-            have = 0
-        if size is not None and have == size:
-            done = True
-            break
-        req = urllib.request.Request(url, headers={"User-Agent": UA, **({"Range": f"bytes={have}-"} if have else {})})
-        try:
-            with opener.open(req, timeout=60) as r:
-                if have and r.status != 206:      # 이어 받기를 안 받는 서버 → 처음부터
-                    have = 0
-                if size is None:
-                    cr = r.headers.get("Content-Range", "")
-                    tail = cr.rsplit("/", 1)[-1] if "/" in cr else ""
-                    if tail.isdigit():
-                        size = int(tail)
-                    elif r.headers.get("Content-Length", "").isdigit():
-                        size = int(r.headers["Content-Length"]) + have
-                mode = "ab" if have else "wb"
-                t0, last, got0 = time.time(), 0, have
-                with open(part, mode) as f:
-                    while True:
-                        b = r.read(CHUNK)
-                        if not b:
-                            break
-                        f.write(b)
-                        have += len(b)
-                        if time.time() - last > 1:
-                            last = time.time()
-                            rate = (have - got0) / max(1e-6, time.time() - t0)
-                            if progress:
-                                progress(have, size, rate)
-                            else:
-                                say(f"    {os.path.basename(dest)} {human(have)} / {human(size)} ({human(rate)}/초)")
-            if size is None or have == size:
-                size = have
+    if forced not in ("curl", "powershell"):
+        tried.append("파이썬")
+        stuck = attempt = 0
+        while attempt < MAX_TRIES:
+            attempt += 1
+            have0 = _part_size(part)
+            try:
+                done, size = _fetch_python(opener, url, part, size, say, progress, dest)
+                if done:
+                    break
+            except (urllib.error.URLError, OSError, TimeoutError) as ex:
+                if _disk_full(ex):
+                    raise
+                if isinstance(ex, PermissionError):
+                    raise DownloadError("file", f"{type(ex).__name__}: {ex}", tried) from None
+                last_kind, last_err = classify(ex), f"{type(ex).__name__}: {ex}"
+                have = _part_size(part)
+                stuck = 0 if have - have0 >= MIN_GAIN else stuck + 1
+                wait = min(BACKOFF_MAX, 2 ** min(stuck, 5)) if stuck else 2
+                if last_kind == "http429":
+                    try:
+                        wait = max(wait, min(60, int(ex.headers.get("Retry-After") or 0)))
+                    except (TypeError, ValueError, AttributeError):
+                        pass
+                say(f"    {attempt}번째 시도 실패({last_kind}): {ex} — 받은 것 {human(have)}")
+                if last_kind in ("tls", "http404", "redirect") or (last_kind == "http403" and stuck >= 2) or stuck >= limit:
+                    break
+                say(f"    {wait}초 뒤 이어서 받음")
+                time.sleep(wait)
+    if not done and native and os.name == "nt" and last_kind != "http404" and forced != "python":
+        for name, fn in (("curl", _fetch_curl), ("powershell", _fetch_powershell)):
+            if forced in ("curl", "powershell") and forced != name:
+                continue
+            say(f"    윈도우 내려받기({name})로 대신 받아 봄 — 앞선 방식이 안 된 까닭: {WHY.get(last_kind, last_kind)}")
+            tried.append("윈도우 " + name)
+            ok, why = fn(url, part, size, say, progress)
+            if ok:
                 done = True
+                size = _part_size(part)
+                say(f"    윈도우 내려받기({name})로 받음 {human(size)}")
                 break
-            raise OSError(f"받은 크기가 모자람({have}/{size})")
-        except (urllib.error.URLError, OSError, TimeoutError) as ex:
-            last_err = str(ex)
-            say(f"    {attempt}번째 시도 실패: {ex} — 잠시 뒤 이어서 받음")
-            if isinstance(ex, urllib.error.HTTPError) and ex.code in (401, 403, 404, 410):
-                break
-            time.sleep(min(30, 2 * attempt))
+            last_err = (last_err + " | " + why).strip(" |")
     if not done:
-        raise RuntimeError(f"여러 번 시도했지만 받지 못함(인터넷 연결 확인 후 다시 시도) — {last_err}")
+        raise DownloadError(last_kind, last_err, tried)
     if progress:
         progress(size, size, 0)
-    os.replace(part, dest)
+    try:
+        _replace(part, dest, say)
+    except PermissionError as ex:
+        raise DownloadError("file", f"{type(ex).__name__}: {ex}", tried) from None
 
 
 def ensure_model(m, root, say=print, progress=None, allow_unverified=False):
@@ -246,7 +481,8 @@ def ensure_model(m, root, say=print, progress=None, allow_unverified=False):
         say(f"  받는 중 {f['path']} ({human(f['size'])})")
         pd = (lambda d, t, r, _base=finished: progress(_base + (d or 0), total, r, "받기")) if progress else None
         try:
-            download(base_url(m) + urllib.parse.quote(f["path"]), dest, f["size"], say=say, progress=pd)
+            download(base_url(m) + urllib.parse.quote(f["path"]), dest, f["size"], say=say, progress=pd,
+                     native=bool(f.get("sha256") or f.get("git_sha1")))      # 받은 뒤 해시로 확인하는 파일만 윈도우 내려받기로 대신 받음
         except RuntimeError as ex:
             say(f"  실패 {f['path']}: {ex}")
             failed.append(f"{m['name']}/{f['path']}")

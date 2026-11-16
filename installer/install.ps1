@@ -145,7 +145,19 @@ $barFill = New-Object Windows.Forms.Panel
 $barFill.Location = New-Object Drawing.Point(0, 0); $barFill.Size = New-Object Drawing.Size(0, 8); $barFill.BackColor = $C_ACC
 $bar.Controls.Add($barFill)
 $detail = Add-Label "인터넷에서 약 $($spec.need)GB 를 받아요(python.org · PyPI · PyTorch · GitHub · 허깅페이스 — 공식 배포처에서 이 PC 가 직접 받아요)." 26 448 670 44 $font $C_MUTED
-$errLbl = Add-Label "" 26 496 670 96 $font $C_BAD
+$errLbl = Add-Label "" 26 496 670 92 $font $C_BAD
+$C_WARN = [Drawing.Color]::FromArgb(227, 179, 65)
+# 실패했을 때만 보이는 도움 줄: 직접 받을 주소 복사 · 기록 폴더 열기
+function Add-Link($text, $x, $w) {
+  $l = New-Object Windows.Forms.LinkLabel
+  $l.Text = $text; $l.Location = New-Object Drawing.Point($x, 590); $l.Size = New-Object Drawing.Size($w, 22); $l.Font = $font
+  $l.LinkColor = $C_ACCINK; $l.ActiveLinkColor = $C_ACC; $l.VisitedLinkColor = $C_ACCINK; $l.Visible = $false
+  $form.Controls.Add($l); return $l
+}
+$lnkCopy = Add-Link "직접 받을 주소 복사" 26 170
+$lnkFolder = Add-Link "기록 폴더 열기" 206 130
+$lnkHow = Add-Link "직접 받아 넣는 방법" 346 170
+$script:manual = $null      # 펫 실행 틀을 직접 받을 때 쓸 정보(주소·파일 이름·크기·넣을 곳)
 
 function Add-Btn($text, $x, $w) {
   $b = New-Object Windows.Forms.Button
@@ -155,7 +167,10 @@ function Add-Btn($text, $x, $w) {
 }
 $btnInstall = Add-Btn "설치" 26 150
 $btnRetry = Add-Btn "다시 하기" 26 150; $btnRetry.Visible = $false
-$btnRun = Add-Btn "$DisplayName 켜기" 26 180; $btnRun.Visible = $false
+$btnRun = Add-Btn "$DisplayName 켜기" 26 150; $btnRun.Visible = $false
+# 펫만 못 받았을 때: 펫만 다시 설치 · 브라우저로 직접 받은 파일로 넣기
+$btnPet = Add-Btn "펫 다시 설치" 184 126; $btnPet.Font = $font; $btnPet.Visible = $false
+$btnPetFile = Add-Btn "받아 둔 파일로" 316 126; $btnPetFile.Font = $font; $btnPetFile.Visible = $false
 $btnLog = Add-Btn "기록 보기" 450 110; $btnLog.Font = $font
 $btnClose = Add-Btn "닫기" 576 120; $btnClose.Font = $font
 $state0 = Join-Path $Prefix "install\state.json"
@@ -195,10 +210,16 @@ function Update-View {
   if ($s."지금" -eq "models" -and -not $script:shotsDone["models"]) { $script:shotsDone["models"] = 1; Save-Shot "2_설치중_모델" }
 }
 
-function Start-Worker {
+function Start-Worker([string]$PetMode = "", [string]$PetFile = "") {
+  # $PetMode = "" (전체 설치) | "pet" (펫 실행 틀만 다시) · $PetFile = 사용자가 직접 받아 둔 압축 파일
   $errLbl.Text = ""; $btnInstall.Visible = $false; $btnRetry.Visible = $false; $locBtn.Enabled = $false; $chkBrain.Enabled = $false
+  $btnRun.Visible = $false; $btnPet.Visible = $false; $btnPetFile.Visible = $false
+  $lnkCopy.Visible = $false; $lnkFolder.Visible = $false; $lnkHow.Visible = $false
+  $script:petMode = $PetMode
   $a = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File", (Join-Path $PSScriptRoot "worker.ps1"),
          "-Prefix", $script:Prefix, "-DataDir", $DataDir, "-Status", $script:status, "-Source", $Source, "-RegKey", $RegKey, "-DisplayName", $DisplayName)
+  if ($PetMode -eq "pet") { $a += "-PetOnly" }
+  if ($PetFile) { $a += @("-PetFile", $PetFile) }
   if ($chkBrain.Checked) { $a += "-LocalBrain" }
   if ($Gemma) { $a += @("-Gemma", $Gemma) }
   if ($DesktopDir) { $a += @("-DesktopDir", $DesktopDir) }
@@ -208,8 +229,23 @@ function Start-Worker {
   $psi = New-Object Diagnostics.ProcessStartInfo("powershell.exe", $q)
   $psi.UseShellExecute = $false; $psi.CreateNoWindow = $true
   $script:worker = [Diagnostics.Process]::Start($psi)
-  $detail.Text = "설치를 시작했어요."
+  $detail.Text = if ($PetMode -eq "pet") { "펫을 다시 설치하는 중이에요." } else { "설치를 시작했어요." }
   $timer.Start()
+}
+
+# 직접 받을 때 쓸 안내(주소·파일 이름·넣을 곳) — 상태 파일의 오류·주의에서 꺼냄
+function Get-Manual($note) {
+  if (-not $note) { return $null }
+  $m = $note."직접받기"
+  if ($m -and $m."주소") { return @{ url = [string]$m."주소"; file = [string]$m."파일"; size = [string]$m."크기_글"; dir = [string]$m."넣을곳" } }
+  if ($note."주소") { return @{ url = [string]$note."주소"; file = [string]$note."파일"; size = ""; dir = [string]$note."넣을곳" } }
+  return $null
+}
+function Show-Help($note, [bool]$petOnlyMissing) {
+  $script:manual = Get-Manual $note
+  $lnkFolder.Visible = $true
+  $lnkCopy.Visible = [bool]$script:manual
+  $lnkHow.Visible = [bool]($script:manual -and $petOnlyMissing)
 }
 
 $timer = New-Object Windows.Forms.Timer
@@ -221,21 +257,75 @@ $timer.Add_Tick({
     Update-View
     $s = $null; try { $s = [IO.File]::ReadAllText($script:status, $utf8) | ConvertFrom-Json } catch { }
     $locBtn.Enabled = $true
-    if ($s -and $s."성공") {
+    $warn = if ($s -and $s."주의") { @($s."주의") | Where-Object { $_ } | Select-Object -First 1 } else { $null }
+    if ($s -and $s."성공" -and $script:petMode -eq "pet") {
+      # 펫만 다시 설치한 것이 끝남 → 처음 설치 결과(김비서 켜기)를 그대로 두고 알림만
+      $errLbl.Text = ""
+      $detail.Text = "펫을 설치했어요. '$DisplayName 켜기'를 누르면 펫도 같이 나와요."
+      $btnRun.Visible = [bool]$script:result
+      Save-Shot "4_펫만_다시설치_끝"
+    } elseif ($s -and $s."성공" -and $warn) {
+      # 펫만 못 받음 — 김비서(대화)는 지금 쓸 수 있고, 펫은 여기서 다시 받거나 받아 둔 파일로 넣을 수 있음
+      $script:result = $s
+      $detail.Text = "설치가 끝났어요. 펫만 아직 못 받았어요 — '$DisplayName 켜기'로 대화는 지금 쓸 수 있어요."
+      $errLbl.ForeColor = $C_WARN
+      $errLbl.Text = "펫을 받지 못했어요: $($warn.'이유')`r`n→ '펫 다시 설치'를 누르거나, 브라우저로 직접 받은 뒤 '받아 둔 파일로'를 눌러 주세요. 나중에 $DisplayName 설정 → 펫 에서도 할 수 있어요."
+      $btnRun.Visible = $true; $btnPet.Visible = $true; $btnPetFile.Visible = $true
+      Show-Help $warn $true
+      Save-Shot "3_설치끝_펫빠짐"
+    } elseif ($s -and $s."성공") {
       $script:result = $s
       $detail.Text = "설치가 끝났어요. 바탕화면의 '$DisplayName' 아이콘으로도 켤 수 있어요."
       $btnRun.Visible = $true
       Save-Shot "3_설치끝"
     } else {
       $e = if ($s) { $s."오류" } else { $null }
+      $errLbl.ForeColor = $C_BAD
       $errLbl.Text = if ($e) { "멈춘 곳: $($e.'단계')`r`n$($e.'이유')`r`n(자세히: $([string]$e.'자세히' | ForEach-Object { $_.Substring(0, [math]::Min(160, $_.Length)) }))" } else { "설치가 끝나지 않았어요. '다시 하기'를 눌러 주세요." }
-      $btnRetry.Visible = $true
-      Save-Shot "3_설치실패"
+      if ($script:petMode -eq "pet") {
+        # 펫만 다시 설치하다 또 실패 — 김비서는 이미 설치돼 있음
+        $btnRun.Visible = [bool]$script:result; $btnPet.Visible = $true; $btnPetFile.Visible = $true
+        Show-Help $e $true
+        Save-Shot "4_펫만_다시설치_실패"
+      } else {
+        $btnRetry.Visible = $true
+        Show-Help $e $false
+        Save-Shot "3_설치실패"
+      }
     }
   }
 })
 $btnInstall.Add_Click({ Save-Shot "1_시작"; Start-Worker })
 $btnRetry.Add_Click({ Start-Worker })
+$btnPet.Add_Click({ Start-Worker "pet" "" })
+$btnPetFile.Add_Click({
+  $d = New-Object Windows.Forms.OpenFileDialog
+  $d.Title = "직접 받아 둔 펫 실행 틀 파일 고르기"
+  $d.Filter = "압축 파일 (*.zip)|*.zip"
+  if ($script:manual -and $script:manual.file) { $d.FileName = $script:manual.file }
+  $dl = Join-Path $env:USERPROFILE "Downloads"
+  if (Test-Path $dl) { $d.InitialDirectory = $dl }
+  if ($d.ShowDialog() -eq "OK") { Start-Worker "pet" $d.FileName }
+})
+$lnkCopy.Add_Click({
+  if ($script:manual -and $script:manual.url) {
+    try { [Windows.Forms.Clipboard]::SetText($script:manual.url); $detail.Text = "주소를 복사했어요. 브라우저 주소창에 붙여 넣으면 받아져요($($script:manual.file) $($script:manual.size))." } catch { $detail.Text = $script:manual.url }
+  }
+})
+$lnkFolder.Add_Click({
+  $ld = Join-Path $DataDir "logs"
+  if (Test-Path $ld) { Start-Process explorer.exe -ArgumentList ('"' + $ld + '"') }
+})
+$lnkHow.Add_Click({
+  if (-not $script:manual) { return }
+  $t = "펫 실행 틀을 직접 받아 넣는 방법`r`n`r`n" +
+       "1) '직접 받을 주소 복사'를 누르고, 크롬·엣지 주소창에 붙여 넣어 받습니다.`r`n   파일: $($script:manual.file)  ($($script:manual.size))`r`n`r`n" +
+       "2) 다 받으면 이 창의 '받아 둔 파일로'를 누르고 방금 받은 파일(보통 '다운로드' 폴더)을 고릅니다.`r`n`r`n" +
+       "3) 파일이 원본과 같은지 확인한 뒤 펫을 설치합니다. 파일이 깨졌거나 다른 파일이면 알려 드려요.`r`n`r`n" +
+       "※ 회사·학교 인터넷에서 계속 안 되면 휴대폰 핫스팟으로 바꿔서 '펫 다시 설치'를 눌러 보세요.`r`n" +
+       "※ 그래도 안 되면 '기록 폴더 열기'로 열린 폴더의 install.log 파일을 보내 주세요."
+  [void][Windows.Forms.MessageBox]::Show($t, "$DisplayName 설치", "OK", "Information")
+})
 $btnRun.Add_Click({
   $r = $script:result."실행"
   $q = ($r."인자" | ForEach-Object { if ($_ -match '[\s"]') { '"' + $_ + '"' } else { $_ } }) -join " "
@@ -253,5 +343,8 @@ $form.Add_FormClosing({
     & taskkill.exe /PID $script:worker.Id /T /F | Out-Null
   }
 })
+# 화면이 작거나 배율이 커서 창이 화면보다 크면 굴려 볼 수 있게(아래 단추가 작업 표시줄에 가리지 않게)
+$wa = [Windows.Forms.Screen]::PrimaryScreen.WorkingArea
+if ($form.Height -gt $wa.Height) { $form.AutoScroll = $true; $form.Height = $wa.Height; $form.Width = $form.Width + 18 }
 if ($Auto) { $form.Add_Shown({ Save-Shot "1_시작"; Start-Worker }) }
 [void]$form.ShowDialog()

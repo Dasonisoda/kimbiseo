@@ -561,6 +561,42 @@ class Api(WinApi):
     def status(self):
         return self._la.summary()
 
+    # ---- 펫 프로그램을 나중에 설치했을 때(설정 → 펫): 파일 고르기·펫 켜기·기록 폴더 열기
+    def pick_zip(self):
+        """파일 고르기 창(압축 파일) → 고른 경로, 안 골랐으면 ''."""
+        w = self._win.get("w")
+        if w is None:
+            return ""
+        try:
+            r = w.create_file_dialog(10, allow_multiple=False, file_types=("압축 파일 (*.zip)", "모든 파일 (*.*)"))   # 10 = 파일 열기
+        except Exception as ex:  # noqa: BLE001
+            log("파일 고르기 실패", repr(ex))
+            return ""
+        return str(r[0]) if r else ""
+
+    def start_pet(self):
+        """펫 프로그램을 방금 설치한 뒤: 설정을 다시 읽고 펫을 켠다(이미 켜져 있으면 그대로)."""
+        log("화면: 펫 켜기")
+        try:
+            la = self._la
+            la.reload()
+            if "pet" in la.mine and la.mine["pet"]["popen"].poll() is None:
+                return {"ok": True, "펫": "켜져 있음"}
+            la.mine.pop("pet", None)
+            ok = la.start_one("pet")
+            return {"ok": bool(ok) and la.state.get("pet") in ("켜짐", "이미 켜져 있음"), "펫": la.state.get("pet"), "이유": la.why.get("pet", "")}
+        except Exception as ex:  # noqa: BLE001
+            log("펫 켜기 실패", repr(ex))
+            return {"ok": False, "이유": str(ex)}
+
+    def open_logs(self):
+        """기록 폴더를 탐색기로 연다(문제가 생겼을 때 기록 파일을 찾기 쉽게)."""
+        try:
+            os.startfile(self._la.logs)
+            return True
+        except OSError:
+            return False
+
     def retry(self):
         threading.Thread(target=self._la._boot, daemon=True).start()
         return True

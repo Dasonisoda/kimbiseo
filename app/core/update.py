@@ -65,9 +65,57 @@ def _open(url, timeout=30):
     return opener.open(req, timeout=timeout)
 
 
+def _loop_url(url):
+    return (urllib.parse.urlsplit(str(url)).hostname or "").lower() in LOOP
+
+
+def _curl(url, out_path, max_bytes, timeout=60):
+    """파이썬으로 못 받을 때 윈도우에 든 curl.exe(윈도우 인증서·보안 연결을 그대로 씀)로 받는다. → 받았으면 True.
+    왜: 파이썬은 윈도우 인증서 저장소에 '이미 있는' 뿌리 인증서만 읽는데 윈도우는 뿌리 인증서를 처음 쓸 때 받아 넣는다
+        → 깃허브 쪽 뿌리를 아직 받은 적 없는 PC 에서는 파이썬만 '인증서 확인 실패'로 업데이트 확인이 늘 안 됐다(설치기의 '펫' 단계와 같은 까닭).
+    받은 것은 부르는 쪽이 서명(업데이트 목록)·sha256(꾸러미)으로 확인하므로 받는 길이 달라도 안전하다. 주소는 먼저 check_url 을 지나야 한다."""
+    import subprocess
+    if os.name != "nt" or _loop_url(url):
+        return False
+    exe = os.path.join(os.environ.get("SystemRoot", ""), "System32", "curl.exe")
+    if not os.path.isfile(exe):
+        return False
+    base = [exe, "--location", "--fail", "--silent", "--show-error", "--max-redirs", "5", "--proto", "=https", "--proto-redir", "=https",
+            "--connect-timeout", "20", "--speed-limit", "1024", "--speed-time", str(int(timeout)), "--max-filesize", str(int(max_bytes)),
+            "--user-agent", UA, "--output", out_path]
+    for extra in (["--ssl-revoke-best-effort"], []):       # 옛 curl 은 이 옵션을 모름(종료 코드 2) → 빼고 한 번 더
+        try:
+            r = subprocess.run(base + extra + [check_url(url)], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+                               creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        except OSError:
+            return False
+        if r.returncode == 0 and os.path.isfile(out_path):
+            return True
+        if r.returncode != 2:
+            return False
+    return False
+
+
 def fetch_bytes(url, limit):
-    with _open(url) as r:
-        b = r.read(limit + 1)
+    try:
+        with _open(url) as r:
+            b = r.read(limit + 1)
+    except (urllib.error.URLError, OSError) as ex:
+        if isinstance(ex, urllib.error.HTTPError):
+            raise
+        import tempfile
+        fd, tmp = tempfile.mkstemp(prefix="kimbiseo_upd_", suffix=".json")
+        os.close(fd)
+        try:
+            if not _curl(url, tmp, limit):
+                raise
+            with open(tmp, "rb") as f:
+                b = f.read(limit + 1)
+        finally:
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
     if len(b) > limit:
         raise UpdateError("업데이트 목록이 너무 커요.")
     return b
@@ -79,18 +127,30 @@ def download(url, dest, size, sha256, progress=None):
     import hashlib
     h = hashlib.sha256()
     got = 0
-    with _open(url, timeout=60) as r, open(tmp, "wb") as f:
-        while True:
-            b = r.read(1 << 18)
-            if not b:
-                break
-            got += len(b)
-            if got > size:
-                raise UpdateError("받은 꾸러미가 목록보다 커요.")
-            h.update(b)
-            f.write(b)
-            if progress:
-                progress(got, size)
+    try:
+        with _open(url, timeout=60) as r, open(tmp, "wb") as f:
+            while True:
+                b = r.read(1 << 18)
+                if not b:
+                    break
+                got += len(b)
+                if got > size:
+                    raise UpdateError("받은 꾸러미가 목록보다 커요.")
+                h.update(b)
+                f.write(b)
+                if progress:
+                    progress(got, size)
+    except (urllib.error.URLError, OSError) as ex:
+        # 파이썬으로 못 받음(인증서 확인 실패·끊김 등) → 윈도우 내려받기로 처음부터 한 번 더. 받은 것은 아래에서 크기·sha256 으로 확인
+        if isinstance(ex, urllib.error.HTTPError) or not _curl(url, tmp, size):
+            raise
+        h, got = hashlib.sha256(), 0
+        with open(tmp, "rb") as f:
+            for b in iter(lambda: f.read(1 << 20), b""):
+                h.update(b)
+                got += len(b)
+        if progress:
+            progress(got, size)
     if got != size or h.hexdigest() != sha256:
         os.remove(tmp)
         raise UpdateError("받은 업데이트 꾸러미가 원본과 달라요(받다가 깨졌을 수 있어요). 다시 해 주세요.")

@@ -244,11 +244,52 @@ def test_swap(tmp, key):
     check("받아 둔 판 없으면 아무것도 안 바꿈", rc == 1 and U.read_version_file(os.path.join(prefix, "src")) == "0.1.0")
 
 
+def test_native_fallback(tmp):
+    """파이썬이 인증서를 못 믿어 업데이트 정보를 못 받는 PC(윈도우 저장소에 깃허브 쪽 뿌리 인증서가 아직 없음) → 윈도우 내려받기로 대신."""
+    import hashlib
+    import ssl
+    import urllib.error
+    saved = (UP._open, UP._curl)
+    calls = []
+
+    def no_tls(url, timeout=30):
+        calls.append("python")
+        raise urllib.error.URLError(ssl.SSLCertVerificationError(1, "CERTIFICATE_VERIFY_FAILED"))
+
+    def curl(url, out_path, max_bytes, timeout=60):
+        calls.append("curl")
+        with open(out_path, "wb") as f:
+            f.write(b'{"ok": 1}')
+        return True
+    try:
+        UP._open, UP._curl = no_tls, curl
+        url = "https://github.com/x/releases/latest/download/latest.json"
+        check("업데이트 목록: 파이썬 인증서 확인 실패 → 윈도우 내려받기로 받음", UP.fetch_bytes(url, 1000) == b'{"ok": 1}' and calls == ["python", "curl"], calls)
+        d = os.path.join(tmp, "nf", "u.zip")
+        got = UP.download(url, d, 9, hashlib.sha256(b'{"ok": 1}').hexdigest())
+        check("업데이트 꾸러미: 대신 받은 것도 크기·sha256 확인을 지나야 씀", got == d and open(d, "rb").read() == b'{"ok": 1}')
+        try:
+            UP.download(url, os.path.join(tmp, "nf", "bad.zip"), 9, "0" * 64)
+            check("업데이트 꾸러미: 대신 받은 것이 원본과 다르면 버림", False)
+        except UP.UpdateError:
+            check("업데이트 꾸러미: 대신 받은 것이 원본과 다르면 버림", not os.path.exists(os.path.join(tmp, "nf", "bad.zip")))
+        UP._curl = lambda *a, **k: False
+        try:
+            UP.fetch_bytes(url, 1000)
+            check("윈도우 내려받기도 안 되면 원래 오류 그대로", False)
+        except urllib.error.URLError:
+            check("윈도우 내려받기도 안 되면 원래 오류 그대로", True)
+    finally:
+        UP._open, UP._curl = saved
+    check("이 PC 안 시험 주소(127.0.0.1)는 윈도우 내려받기를 쓰지 않음", UP._curl("http://127.0.0.1:1/latest.json", os.path.join(tmp, "x"), 10) is False)
+
+
 def main():
     tmp = tempfile.mkdtemp(prefix="kimbiseo_update_test_")
     try:
         test_versions()
         test_urls()
+        test_native_fallback(tmp)
         key, keys, doc, _src = test_sign(tmp)
         test_package(tmp, doc)
         test_needs_setup(tmp, keys, doc)

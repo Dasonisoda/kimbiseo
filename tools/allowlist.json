@@ -43,7 +43,7 @@
       "path": "README.md",
       "origin": "new",
       "treatment": "new",
-      "sha256": "9feddc1c090f46554892e5724d68b4bb237cc48b4370e334a6893c81134374d5",
+      "sha256": "cf73c046d81f00c043daf72d165c19a495bccf3707fe879957dc420f0c8978a0",
       "exceptions": [
         {
           "line": 6,
@@ -265,7 +265,7 @@
       "path": "app/core/update.py",
       "origin": "new",
       "treatment": "new",
-      "sha256": "a11dc492006fc5c7d15b29144bef0e3578ddb1806326ce11c9271af65f449c91",
+      "sha256": "82e57c67d7a756ea2e27dc0faccac47a7f6c087eceb8044576b37ddd4ac69ed4",
       "exceptions": [
         {
           "line": 28,
@@ -307,14 +307,14 @@
       "path": "app/launcher.py",
       "origin": "new",
       "treatment": "new",
-      "sha256": "64e6dad1188e919193bd97bd4d6a05a609a54bfb09639e689a5fae2f497f355a",
+      "sha256": "9dfa590f08f4a1796d74e23f3d687adf295f0494ea4250ac0f25f85b4499f427",
       "note": "실행기(두뇌·귀·목소리·본체·펫 켜고 끄기, 자기 PID 만) — 7단계"
     },
     {
       "path": "app/main.py",
       "origin": "new",
       "treatment": "new",
-      "sha256": "94fd9fc4624127e0d454cea3e0da78c6974db7bc9ad20914b2ae7d87c317cff7",
+      "sha256": "7e8b0df36388ee932e02b0284432a737f99db7ec333eecc59b5e8f283486c6af",
       "note": "본체 실행(serve/script/check)·펫 옷 설정 펫에 알리기·부모 PID 지켜보기 — 7단계"
     },
     {
@@ -446,21 +446,27 @@
       "path": "app/ui/index.html",
       "origin": "new",
       "treatment": "new",
-      "sha256": "930be2161b300c9e18546f39d8d6bde19cc137fd8d53f6708848e697d37ddef3",
+      "sha256": "ebc3292866bd398afd3b0062269899bc80582f302ea964767cb25b86cf65f31a",
       "note": "화면(처음 화면·대화·기억·설정) — 5단계"
+    },
+    {
+      "path": "app/ui/petrt.js",
+      "origin": "new",
+      "treatment": "new",
+      "sha256": "abf1592573441cd388b988198a52691995a487befa1f2d8d7f70933ee4c534fd"
     },
     {
       "path": "app/ui/settings.js",
       "origin": "new",
       "treatment": "new",
-      "sha256": "97b4f0677f3313382319ae3595ed1aa87f749ae15807fd748cc713b24c9f89a9",
+      "sha256": "86181d918e2f9d06651a96fa69970f7f0cafc7dc4381d2f57f1f0a6570744451",
       "note": "화면(처음 화면·대화·기억·설정) — 5단계"
     },
     {
       "path": "app/ui/start.js",
       "origin": "new",
       "treatment": "new",
-      "sha256": "d951a8f1be5120827fa1cce08dbb7794cb0af44116d3bf5a7c78f67efa1f590f",
+      "sha256": "c57b5b957a5704573d29c5f7aeaba47ae2960cc96ccd162e9aaf623c2de48c8c",
       "note": "화면(처음 화면·대화·기억·설정) — 5단계"
     },
     {
@@ -488,7 +494,7 @@
       "path": "app/version.py",
       "origin": "new",
       "treatment": "new",
-      "sha256": "3f001ae615469ad9c79ab7cc71022f1293156f465e5f47302fcf2ec8cbe2a5bb",
+      "sha256": "11acf1ae05cf4e88baf32c5d962956f6d90e39d70a3972c93952001e62faf1dd",
       "note": "판 번호 한 곳 — 9단계"
     },
     {
@@ -564,20 +570,20 @@
       "path": "installer/README.md",
       "origin": "new",
       "treatment": "new",
-      "sha256": "b478d212233eaa53e1513c7fa7bd1723ed18bf58df5f2d1529ed75444c66265d"
+      "sha256": "d230cba0ffe1b3ee54d80688ce1d088b673d0530effade9c3fd26800ca5c9723"
     },
     {
       "path": "installer/get_models.py",
       "origin": "new",
       "treatment": "new",
-      "sha256": "ebf0dfc3ef9248e915becaca009010273d7f4fb96e1c46422a7507c11c7cb97f",
+      "sha256": "ed624b6560e1470cd5e981058270ee30b97d1dfff5bc221572c34ef4f82b1926",
       "note": "모델 받기·확인(이어받기·다시 시도·진행·확인 기록) — 7단계"
     },
     {
       "path": "installer/install.ps1",
       "origin": "new",
       "treatment": "new",
-      "sha256": "a234b0cfef72c432cd139d0f070f979f2d85861d7d3c7d1a44090070631b00fa",
+      "sha256": "6e6fdea724a2b3b14ecd5d0a3a1126d7d1c9120d1137e246ed1ae790179f1185",
       "note": "설치 창(설치 단추 하나·다시 하기·창 없이 일꾼 띄움) — 7단계"
     },
     {
@@ -704,7 +710,7 @@
       "path": "installer/setup_core.py",
       "origin": "new",
       "treatment": "new",
-      "sha256": "2cb9dcc4ddca7ed6542df29ccd577bb72c5e8668442ab8db27c5224cc38d3d4a",
+      "sha256": "604ca7065d50d50aac4e351ca0d2a2826712c3704d2a622d8170ed1a0106cde5",
       "note": "설치 본체(부품·두뇌·모델·펫·아이콘·설정, 있으면 건너뜀) — 7단계"
     },
     {
@@ -725,14 +731,14 @@
       "path": "installer/worker.ps1",
       "origin": "new",
       "treatment": "new",
-      "sha256": "1437a82235bc3965e3f28a05dfd06d1d73308a14dde099fed1cc2b6a83d172ee",
+      "sha256": "34550f7090eb04c7d20806ace570e681a60d365ff8d715a443fcc97c472ee483",
       "note": "설치 일꾼(공식 파이썬 판 고정·sha256·md5 → setup_core) — 7단계"
     },
     {
       "path": "pet/README.md",
       "origin": "new",
       "treatment": "new",
-      "sha256": "96c4d5b9c3c4b13acb48a647d22630773d2a9fc8033dceeccf5dfc0c4e90a6bc"
+      "sha256": "ece0ea87c7166ff7d354eb4cf2a43141d3e296086c191c740a84372b10fad756"
     },
     {
       "path": "pet/config.json",
@@ -745,21 +751,21 @@
       "path": "pet/main.js",
       "origin": "derived:운영판 펫 부품을 고쳐 옮김",
       "treatment": "modified",
-      "sha256": "fc497aac86a4e30cc8e9be60d437f97661d738da45435bdf1c895f27728aea2d",
+      "sha256": "f93b8a36f6e19166289ac661bbe6c539009ec85baff62ffb2b7dbc0b689b939e",
       "note": "공개 펫 본체(옷 꾸러미만·17961·옷 받기·자동 옷 받기·자세별 동작·춤 노래 순서) — 7단계"
     },
     {
       "path": "pet/package.json",
       "origin": "derived:운영판 펫 부품을 고쳐 옮김",
       "treatment": "modified",
-      "sha256": "426c8a02c97f70d06db0702678cf8cf17149d72dcf7c069f7f78d424a467be25",
+      "sha256": "e99c85870b52acbd4c38602b8639273ad8b3720ad30b6bd307685433684fc725",
       "note": "공개 펫 꾸러미 표시(electron 개발용만) — 6단계"
     },
     {
       "path": "pet/packs.js",
       "origin": "derived:운영판 펫 부품을 고쳐 옮김",
       "treatment": "modified",
-      "sha256": "1f2e2b30b521b4165ac913aee0c8446854c4070c27db678fa778a3d336131244",
+      "sha256": "119fa9e2f3cc12bfd1b16237f1f98035c3c231bd5334f4f0401e02356908b920",
       "note": "옷 꾸러미 열기·서명 확인(공개키만)·옷 목록 받기·파일 연결(앱 폴더) — 7단계",
       "exceptions": [
         {
@@ -916,7 +922,7 @@
       "path": "tests/README.md",
       "origin": "new",
       "treatment": "new",
-      "sha256": "b5f0053d245d5c1b2c73e81fbd0b4cd8c72a65f5fc7c0d4bc27ebccefec04fe2"
+      "sha256": "fbcfa2a44845409f2a99d23a806637dee1fa1408d6ffac95cca200728786cd19"
     },
     {
       "path": "tests/brain_eval/cases_ko.json",
@@ -965,11 +971,23 @@
       "note": "두뇌 도구 호출 단위 시험(글로 쓴 호출 건지기·구독 두뇌 글 약속 도구)"
     },
     {
+      "path": "tests/unit/test_install_download.py",
+      "origin": "new",
+      "treatment": "new",
+      "sha256": "d2fa45b9e8e632800c0a723b4bf4ee173616beb4e2f0b5ec1fe2a7ffeeab54d1"
+    },
+    {
       "path": "tests/unit/test_installer.py",
       "origin": "new",
       "treatment": "new",
       "sha256": "117a69be266bd3530505375bd287dbd6831214efacf4e4e606a2d3d063b71563",
       "note": "설치·실행기 단위 시험 — 7단계"
+    },
+    {
+      "path": "tests/unit/test_pet_download.js",
+      "origin": "new",
+      "treatment": "new",
+      "sha256": "0baa83d95a2c17223fbc61cc1cccc973328844cc5919e72fd4befdfe95f1605f"
     },
     {
       "path": "tests/unit/test_settings.py",
@@ -989,7 +1007,7 @@
       "path": "tests/unit/test_update.py",
       "origin": "new",
       "treatment": "new",
-      "sha256": "17928cfc30a42fe7a55bfc22c1f36a2698407dc0a468e895cfdd0c150dbf20f7",
+      "sha256": "2b90689c32302a20e757419cc7afee37b302e00958e268edf2cf12a33f2945ed",
       "note": "업데이트 단위 시험 — 9단계"
     },
     {

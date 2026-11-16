@@ -714,16 +714,17 @@ async function fetchPack(p, how = '옷 받기', wearIt = true) {
   if (fetching) return { ok: false, error: '다른 옷을 받는 중이에요' };
   fetching = p.id;
   fs.mkdirSync(RECV_DIR, { recursive: true });
-  const dest = path.join(RECV_DIR, p.id + '_' + Date.now() + '.hipcpet');
-  let keep = false;
+  // 받는 파일 이름은 옷·판마다 같게 — 받다가 끊겨도 다음에(1분 뒤 저절로 · 다시 눌렀을 때 · 펫을 다시 켰을 때) 받은 만큼 이어서 받음
+  const dest = path.join(RECV_DIR, p.id + '_' + String(p.version || '0').replace(/[^0-9A-Za-z._-]/g, '_').slice(0, 40) + '.hipcpet');
+  let keep = false, keepPart = false;
   try {
     let lastPct = -1;
     const d = await packs.download(p.url, ALLOWED, dest, (got, total) => {
       const pct = total ? Math.floor(100 * got / total) : 0;
       wardSend('ward-progress', { id: p.id, key: p.key, got, total, pct });
       if (pct >= lastPct + 10 || pct === 100) { lastPct = pct; petSend('bubble', { text: `옷 '${p.name}' 받는 중 ${pct}%`, sec: 4 }); }
-    }, p.sha256);
-    log(`옷 받음 ${p.id} ${p.version} ${(d.size / 1e6).toFixed(1)}MB`);
+    }, p.sha256, { onRetry: (n, e, got) => log(`옷 받기 ${n}번째 끊김(${e && e.message}) — 받은 것 ${(got / 1e6).toFixed(1)}MB, 이어서 받음`) });
+    log(`옷 받음 ${p.id} ${p.version} ${(d.size / 1e6).toFixed(1)}MB` + (d.attempts > 1 ? ` (${d.attempts}번에 나눠 받음)` : ''));
     // 목록과 꾸러미가 같은 옷인지(id) 먼저 확인
     let info = null;
     try { info = packs.inspect(dest); } catch (e) { throw e; } finally { if (info) fs.closeSync(info.z.fd); }
@@ -732,11 +733,12 @@ async function fetchPack(p, how = '옷 받기', wearIt = true) {
     if (r && r.asked) keep = true;   // 서명 없는 꾸러미: 옷 창에서 답할 때까지 받은 파일을 둠
     return r;
   } catch (e) {
-    notify('옷을 받지 못했어요: ' + e.message, 7);
+    keepPart = e.code === 'net' && !e.fatal;      // 연결 문제로 멈춤 → 받은 만큼은 남겨 다음에 이어 받음
+    notify('옷을 받지 못했어요: ' + e.message + (keepPart ? ' — 받은 만큼은 남겨 두었어요. 「옷 더 받기」에서 다시 누르면 이어서 받아요(「파일로 옷 추가」로 직접 넣을 수도 있어요).' : ''), 9);
     return { ok: false, error: e.message, code: e.code || 'net' };
   } finally {
     fetching = null;
-    try { if (!keep) fs.rmSync(dest, { force: true }); fs.rmSync(dest + '.받는중', { force: true }); } catch (e) { /* 무시 */ }
+    try { if (!keep) fs.rmSync(dest, { force: true }); if (!keepPart) fs.rmSync(dest + '.받는중', { force: true }); } catch (e) { /* 무시 */ }
   }
 }
 // 첫 실행(옷이 하나도 없음) + 동의(autoPack)했을 때만: 목록의 기본 옷(default·정품)을 저절로 받음. 연결이 안 되면 1분마다 다시(조용히)
@@ -939,8 +941,11 @@ if (!app.requestSingleInstanceLock()) {
     setTimeout(ensureVisible, 1500); setInterval(ensureVisible, 3000);
     log('옷 꾸러미 ' + PACKS.length + '벌(' + PACKS.map(p => p.id + ' ' + p.version).join(', ') + ') · 옷 목록 ' + (PACK_SOURCE || '(정해지지 않음)'));
     if (ASSOC) setTimeout(() => { try { packs.registerAssoc(process.execPath, PROFILE ? path.resolve(PROFILE) : null, log, app.isPackaged ? null : app.getAppPath()); } catch (e) { log('파일 연결 오류 ' + e.message); } }, 2000);
-    try {   // 지난번에 받다 만 임시 파일 치움(<프로필>\옷\_받은파일\ 바로 아래 .hipcpet·.받는중 만)
-      for (const n of fs.existsSync(RECV_DIR) ? fs.readdirSync(RECV_DIR) : []) if (/\.(hipcpet|받는중)$/.test(n)) fs.rmSync(path.join(RECV_DIR, n), { force: true });
+    try {   // 지난번 임시 파일 치움(<프로필>\옷\_받은파일\ 바로 아래): 다 받은 .hipcpet 은 지우고, 받다 만 .받는중 은 사흘 안 것이면 남겨 이어 받음
+      for (const n of fs.existsSync(RECV_DIR) ? fs.readdirSync(RECV_DIR) : []) {
+        const f = path.join(RECV_DIR, n);
+        if (/\.hipcpet$/.test(n) || (/\.받는중$/.test(n) && Date.now() - fs.statSync(f).mtimeMs > 3 * 86400e3)) fs.rmSync(f, { force: true });
+      }
     } catch (e) { /* 무시 */ }
     for (const f of addPackArgs(process.argv)) requestInstall(f, '두 번 누르기(켜면서)');
     if (!PACKS.length) setTimeout(autoFirstPack, 3000);

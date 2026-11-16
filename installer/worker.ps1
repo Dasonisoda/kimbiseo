@@ -14,7 +14,9 @@ param(
   [string]$DisplayName = "김비서",
   [string]$PacksCatalog = "<none>",
   [switch]$NoShortcuts,
-  [switch]$NoRegister
+  [switch]$NoRegister,
+  [switch]$PetOnly,              # 펫 실행 틀만 다시 설치(설치 창 '펫 다시 설치')
+  [string]$PetFile = ""          # 사용자가 브라우저로 직접 받아 둔 펫 실행 틀 압축 파일('받아 둔 파일로')
 )
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
@@ -101,6 +103,14 @@ try {
 
 $args2 = @("-B", "-X", "utf8", (Join-Path $Source "installer\setup_core.py"), "install", "--prefix", $Prefix, "--data", $DataDir,
            "--status", $Status, "--source", $Source, "--reg-key", $RegKey, "--display-name", $DisplayName)
+if ($PetOnly) {
+  # 펫만: 이미 깔린 설치 폴더의 설치 본체로(없으면 받은 폴더 것으로)
+  $core = Join-Path $Prefix "src\installer\setup_core.py"
+  if (-not (Test-Path $core)) { $core = Join-Path $Source "installer\setup_core.py" }
+  $args2 = @("-B", "-X", "utf8", $core, "pet-install", "--prefix", $Prefix, "--data", $DataDir, "--status", $Status)
+  if ($PetFile) { $args2 += @("--file", $PetFile) }
+  Log "펫만 다시 설치$(if ($PetFile) { ' (받아 둔 파일)' })"
+}
 if ($LocalBrain) { $args2 += "--local-brain" }
 if ($Gemma) { $args2 += @("--gemma", $Gemma) }
 if ($DesktopDir) { $args2 += @("--desktop-dir", $DesktopDir) }

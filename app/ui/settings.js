@@ -109,6 +109,7 @@ const Settings = {
     }, {idp: "set-gender"}), list, h("p", {class: "hint", text: "성별을 바꾸면 어울리는 말투로 바뀌고, 목소리는 펫이 입은 옷에 맞춰 자동으로 바뀌어요(직접 고른 경우는 그대로). 고른 캐릭터의 옷이 아직 없으면 펫이 받아 와요(옷 받기에 동의했을 때). 호칭은 '이름·호칭'에서 바꿔요."}));
     draw();
     s.appendChild(this.saveRow("set-pet-save", () => ({펫: {성별: sex, 옷: pet}})));
+    card.appendChild(PetRuntime.section());
   },
 
   // 두뇌 — 두뇌 바꾸기(구독 클로드·구독 GPT·Gemma·내 로컬 AI·API 열쇠) — brain.js

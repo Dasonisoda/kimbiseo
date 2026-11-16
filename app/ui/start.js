@@ -35,6 +35,7 @@
   }
   startEvents();
   Update.load();
+  PetRuntime.load();      // 펫 프로그램이 없으면(설치 때 못 받음) 대화 화면 위에 알림
   setTop("준비됨", "on");
   const first = !get(K.cfg, "처음설정.끝", false) || /[?&]wizard=1\b/.test(location.search);
   if (first) Wizard.start(); else show("main");

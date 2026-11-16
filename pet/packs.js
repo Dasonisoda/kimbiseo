@@ -288,12 +288,23 @@ function checkUrl(u, allowed) {
   else if (url.protocol === 'https:' && (allowed || []).some(h => host === h || host.endsWith('.' + h))) return url;
   throw new PackError('허용하지 않은 주소예요(' + url.protocol + '//' + host + ')', 'net');
 }
-/** GET 하나: 넘겨주기 최대 5번(매번 주소 검사). onRes(res, req) 는 200 응답에서 부름 */
+// 받기 실패의 까닭을 쉬운 말로(펫 말풍선·옷 창에 그대로 나감)
+function netWhy(e) {
+  const m = String((e && (e.code || '')) + ' ' + (e && e.message || ''));
+  if (/CERT|certificate|SSL|TLS/i.test(m)) return '보안 연결(인증서)을 확인하지 못했어요 — 백신·회사망이 연결을 검사하는 것 같아요';
+  if (/ENOTFOUND|EAI_AGAIN/.test(m)) return '받는 곳의 주소를 찾지 못했어요 — 인터넷 연결을 확인해 주세요';
+  if (/ETIMEDOUT|시간 초과/.test(m)) return '받는 곳이 응답하지 않거나 너무 느려요';
+  if (/ECONNREFUSED|EACCES|ENETUNREACH|EHOSTUNREACH/.test(m)) return '이 PC 나 회사망이 받는 곳으로 가는 길을 막고 있어요';
+  if (/ECONNRESET|EPIPE|aborted|socket hang up/i.test(m)) return '받는 도중에 연결이 끊겼어요';
+  return '연결이 안 됐어요(' + String(e && e.message || e).slice(0, 80) + ')';
+}
+/** GET 하나: 넘겨주기 최대 5번(매번 주소 검사). onRes(res, req) 는 200 응답(opts.ok 가 있으면 그 상태 코드들)에서 부름.
+    opts.headers = 더 보낼 머리글(이어 받기 Range). 거절(4xx·5xx)은 err.status 에 상태 코드를 넣어 reject. */
 function request(u, allowed, opts, onRes, reject, hops = 0) {
   let url;
   try { url = checkUrl(u, allowed); } catch (e) { return reject(e); }
   const lib = url.protocol === 'https:' ? https : http;
-  const req = lib.get(url, { timeout: opts.timeout || 15000, headers: { Accept: opts.accept || '*/*', 'User-Agent': 'KimBiseoPet' } }, res => {
+  const req = lib.get(url, { timeout: opts.timeout || 15000, headers: { Accept: opts.accept || '*/*', 'User-Agent': 'KimBiseoPet', ...(opts.headers || {}) } }, res => {
     if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
       res.resume();
       if (hops >= 5) return reject(new PackError('넘겨주기가 너무 많아요', 'net'));
@@ -301,11 +312,17 @@ function request(u, allowed, opts, onRes, reject, hops = 0) {
       try { next = new URL(res.headers.location, url); } catch (e) { return reject(new PackError('넘겨준 주소가 이상해요', 'net')); }
       return request(next, allowed, opts, onRes, reject, hops + 1);
     }
-    if (res.statusCode !== 200) { res.resume(); return reject(new PackError('응답 ' + res.statusCode, 'net')); }
+    if (!(opts.ok || [200]).includes(res.statusCode)) {
+      res.resume();
+      const why = res.statusCode === 403 ? '받는 곳이 거절했어요(403) — 회사·학교망 차단이거나 잠깐의 접속 제한일 수 있어요'
+        : res.statusCode === 404 ? '받을 파일이 그 주소에 없어요(404)' : res.statusCode === 429 ? '받는 곳이 잠시 뒤에 다시 하라고 했어요(접속이 몰림)'
+          : '받는 곳이 응답 ' + res.statusCode + ' 을 보냈어요';
+      return reject(Object.assign(new PackError(why, 'net'), { status: res.statusCode, retryAfter: +res.headers['retry-after'] || 0 }));
+    }
     onRes(res, req);
   });
   req.on('timeout', () => req.destroy(new Error('시간 초과')));
-  req.on('error', e => reject(e instanceof PackError ? e : new PackError('연결 안 됨(' + e.message + ')', 'net')));
+  req.on('error', e => reject(e instanceof PackError ? e : new PackError(netWhy(e), 'net')));
   return req;
 }
 function getJson(u, allowed, max = 2e6) {
@@ -326,32 +343,83 @@ function getBytes(u, allowed, max = 2e6) {
     }, reject);
   });
 }
-/** 꾸러미 파일 받기 → dest. expectSha(목록의 sha256)가 있으면 맞아야 함. 받는 중에는 dest + '.받는중' */
-function download(u, allowed, dest, onProgress, expectSha) {
+const sizeOf = f => { try { return fs.statSync(f).size; } catch (e) { return 0; } };
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+function shaOfFile(f) {
   return new Promise((resolve, reject) => {
-    const tmp = dest + '.받는중';
-    const fail = e => { try { fs.rmSync(tmp, { force: true }); } catch (e2) { /* 없음 */ } reject(e); };
-    request(u, allowed, { timeout: 60000 }, (res, req) => {
-      const total = +res.headers['content-length'] || 0;
-      if (total > LIM.zip) { req.destroy(); return fail(new PackError('꾸러미가 너무 커요')); }
-      const h = crypto.createHash('sha256'), out = fs.createWriteStream(tmp);
-      let got = 0, last = 0;
+    const h = crypto.createHash('sha256');
+    fs.createReadStream(f).on('data', c => h.update(c)).on('end', () => resolve(h.digest('hex'))).on('error', reject);
+  });
+}
+/** 한 번 받기: tmp 뒤에 이어 붙임(start = 지금까지 받은 바이트). 서버가 이어 받기를 안 받으면(200) 처음부터 다시 씀. → { size, total } */
+function fetchPart(u, allowed, tmp, start, onProgress, opts) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const done = (fn, v) => { if (!settled) { settled = true; fn(v); } };
+    request(u, allowed, { timeout: opts.timeout || 60000, ok: [200, 206], headers: start ? { Range: 'bytes=' + start + '-' } : {} }, (res, req) => {
+      const from = res.statusCode === 206 ? start : 0;
+      const cr = /\/(\d+)\s*$/.exec(String(res.headers['content-range'] || ''));
+      const total = cr ? +cr[1] : from + (+res.headers['content-length'] || 0);
+      if (total > LIM.zip) { req.destroy(); return done(reject, Object.assign(new PackError('꾸러미가 너무 커요'), { fatal: true })); }
+      const out = fs.createWriteStream(tmp, { flags: from ? 'a' : 'w' });
+      let got = from, last = 0, err = null;
+      const fail = e => { if (err) return; err = e; res.unpipe(out); out.end(); };   // 받은 만큼은 디스크에 다 쓰고 닫음(이어 받기 자리)
+      out.on('close', () => { if (err) done(reject, err); });
       res.on('data', c => {
-        got += c.length; h.update(c);
-        if (got > LIM.zip) { req.destroy(new Error('너무 큼')); return; }
+        got += c.length;
+        if (got > LIM.zip) { req.destroy(); return fail(Object.assign(new PackError('꾸러미가 너무 커요'), { fatal: true })); }
         if (onProgress && Date.now() - last > 300) { last = Date.now(); onProgress(got, total); }
       });
       res.pipe(out);
       out.on('finish', () => {
-        if (total && got !== total) return fail(new PackError('받다가 끊겼어요', 'net'));
-        const sha = h.digest('hex');
-        if (expectSha && sha !== expectSha) return fail(new PackError('받은 파일이 옷 목록과 달라요(sha256) — 넣지 않았어요', 'sha'));
-        fs.renameSync(tmp, dest); if (onProgress) onProgress(got, total || got); resolve({ path: dest, size: got, sha256: sha });
+        if (err) return;
+        if (total && got !== total) return done(reject, new PackError('받는 도중에 연결이 끊겼어요', 'net'));
+        done(resolve, { size: got, total: total || got });
       });
-      out.on('error', fail);
-      res.on('error', e => { out.destroy(); fail(new PackError('받다가 끊겼어요(' + e.message + ')', 'net')); });
-    }, fail);
+      out.on('error', e => fail(Object.assign(new PackError('받은 파일을 디스크에 쓰지 못했어요(' + e.message + ')', 'file'), { fatal: /ENOSPC/.test(String(e.code)) })));
+      res.on('error', e => fail(new PackError(netWhy(e), 'net')));
+      res.on('aborted', () => fail(new PackError('받는 도중에 연결이 끊겼어요', 'net')));
+    }, e => done(reject, e));
   });
+}
+/** 꾸러미 파일 받기 → dest. expectSha(목록의 sha256)가 있으면 맞아야 함. 받는 중에는 dest + '.받는중'.
+    끊기면 받은 만큼 두고 이어 받는다(Range): 받아지는 동안(한 번에 minGain 넘게)은 계속 다시 잇고(기다림 2·4·8…초, 최대 30초),
+    거의 못 받은 시도가 tries 번 이어지면 그만둔다 — 그때도 받은 만큼(.받는중)은 남겨 다음에 이어 받는다.
+    다 받은 파일이 목록과 다르면(sha256) 지우고 한 번은 저절로 처음부터 다시 받는다.
+    opts: { tries = 5, minGain = 128KB, timeout = 60초, wait(ms), onRetry(시도, 오류, 받은 바이트) } */
+async function download(u, allowed, dest, onProgress, expectSha, opts = {}) {
+  const tmp = dest + '.받는중';
+  const tries = opts.tries || 5, minGain = opts.minGain === undefined ? 128 * 1024 : opts.minGain;
+  const wait = opts.wait || sleep;
+  let stuck = 0, shaRetry = false, lastErr = null;
+  for (let attempt = 1; attempt <= 80; attempt++) {
+    const have = sizeOf(tmp);
+    try {
+      const r = await fetchPart(u, allowed, tmp, have, onProgress, opts);
+      const sha = await shaOfFile(tmp);
+      if (expectSha && sha !== expectSha) {
+        try { fs.rmSync(tmp, { force: true }); } catch (e2) { /* 없음 */ }
+        if (shaRetry) throw Object.assign(new PackError('받은 파일이 두 번 다 옷 목록과 달라요(sha256) — 넣지 않았어요. 백신·회사망이 받는 파일을 바꾸는 것 같아요', 'sha'), { fatal: true });
+        shaRetry = true; stuck = 0;
+        if (opts.onRetry) opts.onRetry(attempt, new PackError('받은 파일이 옷 목록과 달라 새로 받아요', 'sha'), 0);
+        continue;
+      }
+      fs.renameSync(tmp, dest);
+      if (onProgress) onProgress(r.size, r.total);
+      return { path: dest, size: r.size, sha256: sha, attempts: attempt };
+    } catch (e) {
+      if (e && e.fatal) throw e;
+      lastErr = e;
+      if (e && e.status === 416) { try { fs.rmSync(tmp, { force: true }); } catch (e2) { /* 없음 */ } continue; }   // 이어 받을 자리가 서버 파일과 안 맞음 → 처음부터
+      if (e && (e.status === 404 || e.code === 'nosource')) throw e;
+      const now = sizeOf(tmp);
+      stuck = now - have >= minGain ? 0 : stuck + 1;
+      if (stuck >= tries || (e && e.status === 403 && stuck >= 2)) break;
+      if (opts.onRetry) opts.onRetry(attempt, e, now);
+      await wait(Math.max(stuck ? Math.min(30000, 1000 * 2 ** Math.min(stuck, 5)) : 2000, Math.min(60, (e && e.retryAfter) || 0) * 1000));
+    }
+  }
+  throw lastErr || new PackError('받지 못했어요', 'net');
 }
 
 // ---------------------------------------------------------------- 파일 연결(.hipcpet 두 번 누르기 → 이 펫이 받음). 현재 사용자(HKCU)만.
@@ -381,4 +449,4 @@ function registerAssoc(exe, profile, log, appDir) {   // appDir = 묶지 않은 
   return true;
 }
 
-module.exports = { inspect, install, list, remove, getJson, getBytes, download, checkUrl, registerAssoc, insideDir, PackError, fileUrl, ID_RE, PUBKEYS };
+module.exports = { inspect, install, list, remove, getJson, getBytes, download, checkUrl, registerAssoc, insideDir, PackError, fileUrl, ID_RE, PUBKEYS, netWhy };

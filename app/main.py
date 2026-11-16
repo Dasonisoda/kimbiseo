@@ -655,6 +655,67 @@ def make_app():
         logger.info(f"Gemma 지움: {res.get('지움')} {res.get('돌려준')} 못지움={res.get('못지움')}")
         return {**res, "Gemma": gemma_info()}
 
+    # ---------------------------------------------------------------- 펫 프로그램(실행 틀)만 다시 설치 — 설치 때 '펫' 단계를 못 받았을 때
+    pet_job = {"proc": None}
+    pet_status = os.path.join(C.path(CFG, "로그"), "pet_status.json")
+
+    def pet_runtime():
+        """펫 실행 틀이 설치돼 있는지 + 직접 받을 때 필요한 것(주소·파일 이름·크기)."""
+        run = CFG.get("실행") or {}
+        exe = os.path.expandvars(str(run.get("펫_실행파일") or "")) or os.path.join(prefix, "runtime", "electron", "electron.exe")
+        have = os.path.isfile(exe)
+        help_ = {}
+        try:
+            with open(os.path.join(os.path.dirname(setup_py), "runtimes.json"), encoding="utf-8") as f:
+                e = json.load(f)["electron"]
+            help_ = {"주소": e["url"], "파일": os.path.basename(e["url"]), "크기": e["size"], "크기_글": f"{e['size'] / 1024 / 1024:.0f}MB"}
+        except (OSError, ValueError, KeyError):
+            pass
+        st = {}
+        try:
+            with open(pet_status, encoding="utf-8") as f:
+                st = json.load(f)
+        except (OSError, ValueError):
+            pass
+        p = pet_job["proc"]
+        from .pet_link.face import mode_on
+        return {"있음": have, "얼굴_펫": mode_on(CFG) and bool((CFG.get("펫") or {}).get("켜기", True)),
+                "설치중": bool(p is not None and p.poll() is None), "직접받기": help_, "기록폴더": C.path(CFG, "로그"),
+                "진행": {k: st.get(k) for k in ("끝", "성공", "전체", "글", "오류")} if st else None}
+
+    @app.get("/api/pet/runtime")
+    async def pet_runtime_get():
+        info = pet_runtime()
+        if info["진행"] and info["진행"].get("끝") and info["진행"].get("성공") and not (CFG.get("실행") or {}).get("펫_실행파일"):
+            _reload()          # 설치 프로그램이 적은 펫 경로를 읽어 둠
+            info = pet_runtime()
+        return {"ok": True, **info}
+
+    @app.post("/api/pet/install")
+    async def pet_install(request: Request):
+        try:
+            b = await request.json()
+        except ValueError:
+            b = {}
+        p = pet_job["proc"]
+        if p is not None and p.poll() is None:
+            return {"ok": True, "이미": True}
+        args = [sys.executable.replace("pythonw.exe", "python.exe"), "-B", "-X", "utf8", setup_py, "pet-install", "--prefix", prefix,
+                "--data", C.path(CFG, "자료"), "--status", pet_status]
+        f = str((b or {}).get("파일") or "").strip()
+        if f:
+            if not (os.path.isfile(f) and f.lower().endswith(".zip")):
+                return JSONResponse({"ok": False, "오류": "고른 파일을 찾을 수 없어요(.zip 파일을 골라 주세요)."}, status_code=400)
+            args += ["--file", f]
+        try:
+            os.remove(pet_status)
+        except OSError:
+            pass
+        sp = __import__("subprocess")
+        pet_job["proc"] = sp.Popen(args, cwd=os.path.dirname(setup_py), creationflags=getattr(sp, "CREATE_NO_WINDOW", 0))
+        logger.info(f"펫 프로그램 설치 시작 PID {pet_job['proc'].pid}" + (" (받아 둔 파일)" if f else ""))
+        return {"ok": True, "PID": pet_job["proc"].pid}
+
     @app.on_event("startup")
     async def _prewarm():
         asyncio.ensure_future(cli_brain.prewarm(CFG))
