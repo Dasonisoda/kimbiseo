@@ -1,5 +1,5 @@
 # 설치 때 받기 단위 시험 — 끊겨도 이어 받기 · 원인 가려내기 · 윈도우 내려받기로 대신 받기 · 깨진 파일 다시 받기 ·
-#   '펫' 단계가 실패해도 설치를 끝내기 · 펫만 다시 설치 · 받아 둔 파일로 넣기.   python -B -m tests.unit.test_install_download
+#   '펫' 단계가 실패해도 설치를 끝내기 · 펫만 다시 받기 · 직접 받은 파일로 넣기.   python -B -m tests.unit.test_install_download
 #
 # 진짜 인터넷·진짜 설치 없이 돈다: 이 PC 안 임시 서버(일부러 끊고·거절하고·깨진 파일을 줌)와 임시 폴더(한글·빈칸 든 경로)만 쓴다.
 import argparse
@@ -152,6 +152,104 @@ def test_classify():
     check("원인마다 쉬운 말이 있음", all(GM.WHY.get(k) for k in ("tls", "dns", "timeout", "reset", "blocked", "http403", "http404", "http429", "http5xx", "redirect", "short", "file", "net")))
 
 
+def _make_ca_and_server_cert(folder):
+    """시험용 뿌리 인증서와, 그것으로 서명한 127.0.0.1 서버 인증서를 만든다(cryptography). → (뿌리 pem 경로, 서버 인증서 경로, 서버 열쇠 경로)"""
+    import datetime
+    import ipaddress
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.x509.oid import NameOID
+    now = datetime.datetime.now(datetime.timezone.utc)
+    ca_key = ec.generate_private_key(ec.SECP256R1())
+    ca_name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "KimBiseo Unit Test Root")])
+    ca = (x509.CertificateBuilder().subject_name(ca_name).issuer_name(ca_name).public_key(ca_key.public_key()).serial_number(x509.random_serial_number())
+          .not_valid_before(now - datetime.timedelta(days=1)).not_valid_after(now + datetime.timedelta(days=2))
+          .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
+          .add_extension(x509.KeyUsage(digital_signature=True, key_cert_sign=True, crl_sign=True, content_commitment=False, key_encipherment=False,
+                                       data_encipherment=False, key_agreement=False, encipher_only=False, decipher_only=False), critical=True)
+          .sign(ca_key, hashes.SHA256()))
+    key = ec.generate_private_key(ec.SECP256R1())
+    cert = (x509.CertificateBuilder().subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "127.0.0.1")])).issuer_name(ca_name)
+            .public_key(key.public_key()).serial_number(x509.random_serial_number())
+            .not_valid_before(now - datetime.timedelta(days=1)).not_valid_after(now + datetime.timedelta(days=2))
+            .add_extension(x509.SubjectAlternativeName([x509.IPAddress(ipaddress.ip_address("127.0.0.1"))]), critical=False)
+            .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
+            .sign(ca_key, hashes.SHA256()))
+    paths = [os.path.join(folder, n) for n in ("root.pem", "server.pem", "server.key")]
+    open(paths[0], "wb").write(ca.public_bytes(serialization.Encoding.PEM))
+    open(paths[1], "wb").write(cert.public_bytes(serialization.Encoding.PEM))
+    open(paths[2], "wb").write(key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.TraditionalOpenSSL, serialization.NoEncryption()))
+    return paths
+
+
+def test_trusts_bundled_roots_when_windows_store_lacks_them():
+    """0.1.11 실제 사용자 기록의 실패: 윈도우 인증서 저장소에 받는 곳의 뿌리가 아직 없으면 파이썬만 'unable to get local issuer certificate'.
+    → 뿌리 묶음(certifi)을 같이 믿으면 파이썬으로 그대로 받아진다. 검증은 끄지 않는다."""
+    bundle = GM.ca_bundle()
+    text = open(bundle, encoding="utf-8", errors="replace").read() if bundle else ""
+    check("뿌리 인증서 묶음(certifi)을 찾음 — 깃허브 쪽 뿌리 둘(ISRG Root X1 · USERTrust ECC)이 들어 있음",
+          bool(bundle) and "ISRG Root X1" in text and "USERTrust ECC Certification Authority" in text, bundle)
+    real_load, real_paths, real_bundle = ssl.SSLContext.load_default_certs, ssl.SSLContext.set_default_verify_paths, GM.ca_bundle
+    env_native = os.environ.get(GM.NATIVE_ENV)
+    try:
+        # 깨끗한 윈도우 흉내: 저장소에서 아무 뿌리도 못 읽음
+        ssl.SSLContext.load_default_certs = lambda self, purpose=ssl.Purpose.SERVER_AUTH: None
+        ssl.SSLContext.set_default_verify_paths = lambda self: None
+        GM._TLS.clear()
+        ctx = GM.ssl_context()
+        n = ctx.cert_store_stats().get("x509_ca", 0)
+        check("윈도우 저장소가 비어 있어도 묶음의 뿌리를 믿음(100개 넘게) · 검증은 켜져 있음(인증서 필수 + 이름 확인)",
+              n > 100 and ctx.verify_mode == ssl.CERT_REQUIRED and ctx.check_hostname is True and ssl.create_default_context().cert_store_stats().get("x509_ca", 0) == 0, n)
+        check("기록용 한 줄에 '묶음'을 믿는다고 나옴", "묶음" in GM.tls_note() and "묶음 없음" not in GM.tls_note(), GM.tls_note())
+        try:
+            import cryptography  # noqa: F401
+        except ImportError:
+            print("건너뜀 진짜 보안 연결 시험(cryptography 없음)")
+            return
+        os.environ[GM.NATIVE_ENV] = "python"          # 윈도우 내려받기(curl)로 넘어가지 않게 — 파이썬 길만 본다
+        with tempfile.TemporaryDirectory(prefix="김비서 인증서 시험 ") as td:
+            root_pem, crt, key = _make_ca_and_server_cert(td)
+            srv = ThreadingHTTPServer(("127.0.0.1", 0), H)
+            sctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            sctx.load_cert_chain(crt, key)
+            srv.socket = sctx.wrap_socket(srv.socket, server_side=True)
+            srv.daemon_threads = True
+            threading.Thread(target=srv.serve_forever, daemon=True).start()
+            url = f"https://127.0.0.1:{srv.server_address[1]}/ok"
+            try:
+                # ① 고치기 전과 같은 상태: 받는 곳의 뿌리가 저장소에도 묶음에도 없음 → 실제 사용자 기록과 같은 오류
+                GM.ca_bundle = lambda: ""
+                GM._TLS.clear()
+                try:
+                    GM.download(url, os.path.join(td, "a.zip"), len(GOOD), tries=1, say=lambda m: None, hosts=("127.0.0.1",), native=True)
+                    check("뿌리가 없으면 '인증서 확인 실패'로 가려냄(검증을 건너뛰지 않음)", False, "받아짐")
+                except GM.DownloadError as ex:
+                    check("뿌리가 없으면 '인증서 확인 실패'로 가려냄(검증을 건너뛰지 않음) — 사용자 기록과 같은 오류",
+                          ex.kind == "tls" and "unable to get local issuer certificate" in str(ex) and "보안 인증서" in ex.why and not os.path.exists(os.path.join(td, "a.zip")), str(ex))
+                # ② 고친 뒤: 그 뿌리가 묶음에 있으면 파이썬으로 그대로 받음
+                GM.ca_bundle = lambda: root_pem
+                GM._TLS.clear()
+                GM.download(url, os.path.join(td, "b.zip"), len(GOOD), tries=1, say=lambda m: None, hosts=("127.0.0.1",), native=True)
+                check("같은 PC 상태에서, 뿌리가 묶음에 있으면 파이썬으로 받아짐(sha256 같음)",
+                      hashlib.sha256(open(os.path.join(td, "b.zip"), "rb").read()).hexdigest() == SHA)
+                # ③ 이름이 다른 인증서는 여전히 거절(검증이 살아 있음)
+                try:
+                    GM.download(url.replace("127.0.0.1", "localhost"), os.path.join(td, "c.zip"), len(GOOD), tries=1, say=lambda m: None, hosts=("localhost",), native=True)
+                    check("인증서의 이름이 다르면 거절", False, "받아짐")
+                except GM.DownloadError as ex:
+                    check("인증서의 이름이 다르면 거절", ex.kind == "tls", str(ex))
+            finally:
+                srv.shutdown()
+    finally:
+        ssl.SSLContext.load_default_certs, ssl.SSLContext.set_default_verify_paths, GM.ca_bundle = real_load, real_paths, real_bundle
+        GM._TLS.clear()
+        if env_native is None:
+            os.environ.pop(GM.NATIVE_ENV, None)
+        else:
+            os.environ[GM.NATIVE_ENV] = env_native
+
+
 def test_native_fallback():
     """파이썬이 인증서를 못 믿으면(윈도우 저장소에 뿌리 인증서가 아직 없음) 바로 윈도우 내려받기로 넘어간다."""
     with tempfile.TemporaryDirectory() as td:
@@ -240,10 +338,10 @@ def test_fetcher_hash_and_manual_file():
         check("받은 파일이 원본과 다르면 저절로 한 번 새로 받아 맞춤", hashlib.sha256(open(d, "rb").read()).hexdigest() == SHA and HITS["/corrupt-once"] == 2, HITS)
         try:
             f.get(net.base + "/corrupt", os.path.join(td, "b.zip"), SHA, len(GOOD), "시험 파일")
-            check("두 번 다 원본과 다르면 멈추고 '받아 둔 파일로 넣기'를 안내", False)
+            check("두 번 다 원본과 다르면 멈추고 '직접 받아 넣기'를 안내", False)
         except SC.Fail as ex:
-            check("두 번 다 원본과 다르면 멈추고 '받아 둔 파일로 넣기'를 안내",
-                  ex.info.get("원인") == "hash" and "받아 둔 파일" in ex.why and not os.path.exists(os.path.join(td, "b.zip")) and ex.info.get("주소"), ex.why)
+            check("두 번 다 원본과 다르면 멈추고 '직접 받아 넣기'를 안내",
+                  ex.info.get("원인") == "hash" and "직접 받아 넣어" in ex.why and not os.path.exists(os.path.join(td, "b.zip")) and ex.info.get("주소"), ex.why)
         try:
             f.get(net.base + "/403", os.path.join(td, "c.zip"), SHA, len(GOOD), "시험 파일")
             check("받기 실패 안내에 원인·직접 받을 주소·넣을 곳이 들어감", False)
@@ -326,14 +424,14 @@ def test_pet_from_manual_file():
         inst = _installer(td, status=os.path.join(td, "pet_status.json"), file=mine)
         inst.rt["electron"] = {"version": "9.9.9", "url": net.base + "/403", "sha256": SHA, "size": len(GOOD)}      # 인터넷으로는 못 받는 상황
         rc = inst.run_pet()
-        check("받아 둔 파일로 넣기: 인터넷으로 못 받아도 직접 받은 파일로 설치됨(받으러 가지 않음)",
+        check("직접 넣기: 인터넷으로 못 받아도 직접 받은 파일로 설치됨(받으러 가지 않음)",
               rc == 0 and os.path.isfile(os.path.join(inst.P, "runtime", "electron", "electron.exe")) and "/403" not in HITS, HITS)
         open(mine, "wb").write(BAD)
         inst = _installer(os.path.join(td, "둘째"), status=os.path.join(td, "pet_status2.json"), file=mine)
         inst.rt["electron"] = {"version": "9.9.9", "url": net.base + "/403", "sha256": SHA, "size": len(GOOD)}
         rc = inst.run_pet()
         st = json.load(open(inst.st.path, encoding="utf-8"))
-        check("받아 둔 파일로 넣기: 다른 파일이면 설치하지 않고 알림", rc == 1 and st["성공"] is False and "원본과 달라요" in st["오류"]["이유"]
+        check("직접 넣기: 다른 파일이면 설치하지 않고 알림", rc == 1 and st["성공"] is False and "원본과 달라요" in st["오류"]["이유"]
               and not os.path.exists(os.path.join(inst.P, "runtime", "electron")), st.get("오류"))
 
 
@@ -355,6 +453,7 @@ def test_broken_zip_is_not_installed():
 def main():
     test_download_resume_and_reasons()
     test_classify()
+    test_trusts_bundled_roots_when_windows_store_lacks_them()
     test_native_fallback()
     test_rename_waits_for_antivirus()
     test_fetcher_hash_and_manual_file()

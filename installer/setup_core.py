@@ -8,7 +8,7 @@
 #   install 에도 --gemma E2B 를 주면 이 PC 두뇌를 작은 판으로 받음(기본 E4B)
 #   python setup_core.py gemma-remove --prefix … --data …     Gemma·두뇌 프로그램 지우기(지운 크기 JSON 으로)
 #   python setup_core.py pet-install --prefix … --data … --status <상태 파일> [--file <받아 둔 electron zip>]
-#       펫 실행 틀(Electron)만 다시 설치 — 설치 창의 '펫 다시 설치'·'받아 둔 파일로 넣기', 김비서 설정 → 펫 의 같은 단추가 부름.
+#       펫 실행 틀(Electron)만 다시 설치 — 설치 창의 '펫 다시 받기'·'직접 넣기', 김비서 설정 → 펫 의 같은 단추가 부름.
 #       --file 은 사용자가 브라우저로 직접 받은 압축 파일(크기·sha256 이 목록과 같아야 씀).
 # 0.1.4~ 두뇌: 이 PC 에 클로드 코드·Codex 로그인이 있으면 Gemma 를 받지 않음(plan.py). 업데이트(덮어 설치) 때
 #   이미 있는 Gemma·두뇌 프로그램은 지우지 않고, 설정의 두뇌 경로는 디스크에 실제 있는 파일로 맞춘다.
@@ -21,7 +21,8 @@
 # 0.1.12~ 받기 실패에 강하게(사용자 보고: '펫' 단계에서 받기가 멈춰 설치가 끝나지 않음)
 #   - 받기: 조금이라도 받아지면 계속 이어 받고, 파이썬으로 안 되면 윈도우 내려받기(curl.exe → 파워셸)로 대신 받음(get_models.download).
 #     받은 파일이 원본과 다르면(sha256) 한 번은 저절로 새로 받음. 실패하면 원인(인증서·주소 못 찾음·막힘·끊김·거절 …)을 쉬운 말로 알림.
-#   - '펫' 단계는 실패해도 설치를 끝냄(OPTIONAL) — 김비서(대화)는 먼저 쓰고, 펫은 나중에 '펫 다시 설치'·'받아 둔 파일로 넣기'로.
+#   - '펫' 단계는 실패해도 설치를 끝냄(OPTIONAL) — 김비서(대화)는 먼저 쓰고, 펫은 나중에 '펫 다시 받기'·'직접 넣기'로.
+#   - 멈춘 것처럼 보이지 않게: 2초마다 상태 파일을 새로 쓰고(경과_초·조용_초), 큰 부품을 디스크에 푸는 동안 풀린 양을 3초마다 보여 줌.
 #     상태 파일의 "주의" 에 무엇이 빠졌는지·직접 받을 주소·넣을 곳을 적어 설치 창이 보여 줌.
 import argparse
 import datetime
@@ -31,6 +32,7 @@ import os
 import shutil
 import subprocess
 import sys
+import threading
 import time
 import traceback
 import zipfile
@@ -87,6 +89,35 @@ class Status:
         self.d.update({"끝": False, "성공": False, "오류": None, "지금": "", "글": "", "진행": 0, "전체": 0, "주의": []})
         self.cur = None
         self._last = 0
+        self.t0 = time.time()           # 설치 시작(지난 시간 표시)
+        self.step_t0 = time.time()      # 지금 단계 시작
+        self.alive_t = time.time()      # 마지막으로 '진짜 진전'이 있던 때(받은 양이 늘었거나 다음 일로 넘어감)
+        self._beat = None
+        self._lock = threading.Lock()
+        self.d.update({"시각": "", "경과_초": 0, "단계_경과_초": 0, "조용_초": 0})
+
+    def heartbeat(self, on=True):
+        """2초마다 상태 파일을 새로 씀(지난 시간 · '조용_초' = 진전이 없던 시간). 설치 창은 '조용_초'가 길어지면
+        '멈췄을 수 있어요' 안내를 띄운다 — 일꾼이 살아만 있고 일이 안 나가는 경우와, 오래 걸리지만 나아가는 경우를 가름."""
+        if not on:
+            self._beat = None
+            return
+        if self._beat is not None:
+            return
+        me = self._beat = object()
+
+        def run():
+            while self._beat is me and not self.d.get("끝"):
+                time.sleep(2.0)
+                try:
+                    self.write(force=True)
+                except Exception:  # noqa: BLE001  (다른 줄이 상태를 고치는 순간과 겹치면 다음 번에)
+                    pass
+        threading.Thread(target=run, name="status-beat", daemon=True).start()
+
+    def touch(self):
+        """진짜 진전이 있었음."""
+        self.alive_t = time.time()
 
     def log(self, *a):
         line = time.strftime("%Y-%m-%d %H:%M:%S ") + " ".join(str(x) for x in a)
@@ -110,6 +141,8 @@ class Status:
         st["상태"], st["글"] = "하는 중", ""
         self.d["지금"] = sid
         self.d["진행"] = 0
+        self.step_t0 = time.time()
+        self.touch()
         self.log(f"==== {st['이름']}")
         self.write(force=True)
 
@@ -117,17 +150,22 @@ class Status:
         st = self.step(sid)
         st["상태"], st["글"] = state, text
         self.d["진행"] = 100
+        self.touch()
         self.log(f"---- {st['이름']}: {state} {text}")
         self.write(force=True)
 
-    def progress(self, frac, text=""):
+    def progress(self, frac, text="", alive=True):
+        """alive=False = 글만 고침(지난 시간 표시처럼 진전이 아닌 것) — '조용_초'를 되돌리지 않음."""
         self.d["진행"] = max(0, min(100, round(frac * 100, 1)))
         if text:
             self.d["글"] = text
+        if alive:
+            self.touch()
         self.write()
 
     def say(self, text):
         self.d["글"] = text
+        self.touch()
         self.log("  " + text)
         self.write()
 
@@ -140,24 +178,88 @@ class Status:
         if not force and time.time() - self._last < 0.4:
             return
         self._last = time.time()
-        self.d["전체"] = self.total()
-        self.d["시각"] = time.strftime("%H:%M:%S")
-        tmp = self.path + ".tmp"
-        try:
-            with open(tmp, "w", encoding="utf-8") as f:
-                json.dump(self.d, f, ensure_ascii=False, indent=0)
-            for _ in range(20):   # 설치 창이 읽는 중이면 잠깐 기다렸다가
-                try:
-                    os.replace(tmp, self.path)
-                    break
-                except PermissionError:
-                    time.sleep(0.05)
-        except OSError:
-            pass
+        with self._lock:              # 살아 있음 표시 줄과 일하는 줄이 같은 임시 파일을 동시에 쓰지 않게
+            now = time.time()
+            self.d["전체"] = self.total()
+            self.d["시각"] = time.strftime("%H:%M:%S")
+            self.d["경과_초"] = int(now - self.t0)
+            self.d["단계_경과_초"] = int(now - self.step_t0)
+            self.d["조용_초"] = 0 if self.d.get("끝") else int(now - self.alive_t)
+            tmp = self.path + ".tmp"
+            try:
+                with open(tmp, "w", encoding="utf-8") as f:
+                    json.dump(self.d, f, ensure_ascii=False, indent=0)
+                for _ in range(20):   # 설치 창이 읽는 중이면 잠깐 기다렸다가
+                    try:
+                        os.replace(tmp, self.path)
+                        break
+                    except PermissionError:
+                        time.sleep(0.05)
+            except OSError:
+                pass
 
 
 def human(n):
     return GM.human(n)
+
+
+def took(sec):
+    """지난 시간 글: 45초 · 3분 20초 · 1시간 5분."""
+    sec = int(sec)
+    if sec < 60:
+        return f"{sec}초"
+    if sec < 3600:
+        return f"{sec // 60}분 {sec % 60}초"
+    return f"{sec // 3600}시간 {sec % 3600 // 60}분"
+
+
+# 받기 실패 까닭 한 줄(설치 창의 '까닭:' 줄) — 받기 원인은 get_models.WHY, 그 밖은 여기
+SHORT_WHY = {"hash": "받은 파일이 원본과 달라요(백신이나 회사 인터넷이 파일을 바꾸는 것 같아요).",
+             "disk": "디스크 공간이 모자라요.", "file": "파일을 저장하거나 풀지 못했어요(백신이 막았을 수 있어요)."}
+
+
+def short_why(kind, why=""):
+    if kind in SHORT_WHY:
+        return SHORT_WHY[kind]
+    if kind in GM.WHY:
+        return GM.WHY[kind]
+    return (str(why).split(". ")[0].rstrip(".") + ".") if why else ""
+
+
+def unpacked_size(files):
+    """받은 부품(.whl = zip)들이 디스크에 풀리면 차지할 크기(바이트) — 설치 진행 막대의 분모. 못 읽는 파일은 받은 크기의 2배로 어림."""
+    total = 0
+    for f in files:
+        try:
+            with zipfile.ZipFile(f) as z:
+                total += sum(i.file_size for i in z.infolist())
+        except (OSError, zipfile.BadZipFile):
+            try:
+                total += os.path.getsize(f) * 2
+            except OSError:
+                pass
+    return total
+
+
+def tree_size(path):
+    """폴더 크기(바이트) — 부품을 설치하는 동안 얼마나 풀렸는지 보려고. 못 읽는 파일은 건너뜀."""
+    total = 0
+    stack = [path]
+    while stack:
+        d = stack.pop()
+        try:
+            with os.scandir(d) as it:
+                for e in it:
+                    try:
+                        if e.is_dir(follow_symlinks=False):
+                            stack.append(e.path)
+                        else:
+                            total += e.stat(follow_symlinks=False).st_size
+                    except OSError:
+                        pass
+        except OSError:
+            pass
+    return total
 
 
 def sha256_of(path, progress=None):
@@ -168,7 +270,7 @@ def sha256_of(path, progress=None):
 def head(url, hosts):
     """시험(--dry-run): 받지 않고 크기만 물음(넘겨주기도 허용 호스트만). → (최종 주소, 크기|None)"""
     import urllib.request
-    opener = urllib.request.build_opener(GM._redirect_for(hosts))
+    opener = GM.make_opener(hosts)
     req = urllib.request.Request(url, method="HEAD", headers={"User-Agent": GM.UA})
     with opener.open(req, timeout=30) as r:
         n = r.headers.get("X-Linked-Size") or r.headers.get("Content-Length") or ""
@@ -217,11 +319,11 @@ class Fetcher:
             try:
                 GM.download(url, dest, size, say=lambda m: self.st.log(m), progress=prog, hosts=self.hosts, native=True)
             except GM.DownloadError as ex:
-                raise Fail(f"{name} 을(를) 받지 못했어요. {ex.why} '다시 하기'를 누르면 받은 만큼은 이어서 받아요.", str(ex),
-                           원인=ex.kind, 방식=ex.tried, **info) from None
+                raise Fail(f"{name} 을(를) 받지 못했어요. {ex.why}", str(ex), 원인=ex.kind, 방식=ex.tried, **info) from None
             except RuntimeError as ex:
-                raise Fail(f"{name} 을(를) 받지 못했어요. 인터넷 연결을 확인하고 '다시 하기'를 눌러 주세요(받은 만큼은 이어서 받아요).", str(ex),
+                raise Fail(f"{name} 을(를) 받지 못했어요. 인터넷 연결에 문제가 있어요.", str(ex),
                            원인="net", **info) from None
+            self.st.progress(b, f"{name} 확인 중(원본과 같은지)")
             got = sha256_of(dest)
             if got == sha256:
                 return dest
@@ -230,8 +332,8 @@ class Fetcher:
             except OSError:
                 pass
             self.st.log(f"  {name}: 받은 파일이 원본과 다름(sha256 {got[:16]}… ≠ {sha256[:16]}…)" + (" → 새로 받음" if round_ == 1 else ""))
-        raise Fail(f"받은 {name} 이(가) 두 번 다 원본과 달라요. 백신·회사망이 내려받는 파일을 바꾸거나 막는 것 같아요. "
-                   "다른 인터넷(휴대폰 핫스팟 등)에서 '다시 하기'를 누르거나, 브라우저로 직접 받아 '받아 둔 파일로 넣기'를 써 주세요.",
+        raise Fail(f"받은 {name} 이(가) 두 번 다 원본과 달라요. 백신이나 회사 인터넷이 받는 파일을 바꾸는 것 같아요. "
+                   "다른 인터넷(휴대폰 핫스팟 등)으로 바꿔서 다시 해 보거나, 브라우저로 직접 받아 넣어 주세요.",
                    f"sha256 {got} ≠ {sha256}", 원인="hash", **info)
 
     def need_space(self, dest, size, name):
@@ -264,7 +366,7 @@ class Fetcher:
         self.st.progress(0.2, f"{name}: 고른 파일을 확인하는 중")
         got = sha256_of(src)
         if got != sha256:
-            raise Fail(f"고른 파일이 {name} 원본과 달라요. 안내에 적힌 주소에서 다시 받아 주세요.", f"{src} sha256 {got} ≠ {sha256}", 원인="hash")
+            raise Fail(f"고른 파일이 {name} 원본과 달라요. '직접 넣기'의 ①로 다시 받아 주세요.", f"{src} sha256 {got} ≠ {sha256}", 원인="hash")
         os.makedirs(os.path.dirname(dest), exist_ok=True)
         if os.path.normcase(os.path.abspath(src)) != os.path.normcase(os.path.abspath(dest)):
             shutil.copyfile(src, dest)
@@ -435,6 +537,7 @@ class Installer:
 
     # ---- 2. 프로그램 파일
     def do_files(self):
+        self.st.say("프로그램 파일을 설치 폴더에 복사해요.")
         dst = self.path("src")
         if os.path.normcase(os.path.abspath(dst)) == os.path.normcase(self.src):
             return "건너뜀", "설치 폴더에서 다시 실행 — 복사 안 함"
@@ -479,7 +582,9 @@ class Installer:
             f.write(chr(10).join(["python311.zip", ".", os.path.join("Lib", "site-packages"), os.path.join("..", "..", "src"),
                                "# 김비서: 위 줄 = 설치 폴더의 src(본체 코드). 환경변수·레지스트리는 보지 않음", "import site", ""]))
 
-    def pip(self, py, args, label, frac=(0.0, 1.0), count=0):
+    def pip(self, py, args, label, frac=(0.0, 1.0), count=0, expect=0, site=None):
+        """pip 를 돌린다. 큰 부품(수 GB)을 디스크에 푸는 동안 pip 는 몇 분씩 아무 말도 안 하므로, 그동안 3초마다
+        '설치하는 중 · 지금까지 풀린 양 / 예상 양 · 지난 시간'을 상태에 적어 멈춘 것처럼 보이지 않게 한다(expect = 다 풀렸을 때 크기 바이트)."""
         cmd = [py, "-m", "pip", *args, "--disable-pip-version-check", "--no-warn-script-location", "--progress-bar", "off"]
         self.st.log("  $ " + " ".join(cmd[:6]) + " …")
         env = {**os.environ, "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8", "PIP_NO_INPUT": "1", "PIP_CONFIG_FILE": os.devnull,
@@ -490,28 +595,80 @@ class Installer:
                              creationflags=NO_WINDOW, cwd=self.path("install"))
         seen, tail = 0, []
         a, b = frac
-        for raw in p.stdout:
-            line = raw.decode("utf-8", "replace").rstrip()
-            if not line:
-                continue
-            self.st.log("    " + line[:300])
-            tail = (tail + [line])[-15:]
-            if line.startswith(("Processing ", "Building wheel", "Installing collected")):
-                seen += 1
-                nm = line.split()[1] if line.startswith("Processing") else line
-                self.st.progress(a + (b - a) * min(0.95, seen / max(1, count + 2)), f"{label}: {os.path.basename(nm)[:60]}")
-        rc = p.wait()
+        site = site or os.path.join(os.path.dirname(py), "Lib", "site-packages")      # 부품이 풀리는 곳(크기를 재서 진행을 보임)
+        watch = {"on": True, "phase": "", "t0": time.time(), "log_t": time.time()}
+
+        def beat():
+            base = tree_size(site)
+            prev, gap = -1, 3.0
+            while watch["on"]:
+                time.sleep(gap)
+                if not watch["on"]:
+                    break
+                if watch["phase"] != "install":
+                    continue
+                t = time.time()
+                cur = max(0, tree_size(site) - base)
+                gap = max(3.0, min(20.0, (time.time() - t) * 4))     # 크기 재기가 느린 PC(백신 검사)에서는 덜 자주
+                el = time.time() - watch["t0"]
+                f = min(0.97, cur / expect) if expect else 0.5
+                self.st.progress(a + (b - a) * max(0.3, f), f"{label}: 디스크에 푸는 중 {human(cur)}" + (f" / 약 {human(expect)}" if expect else "")
+                                 + f" · {took(el)}째 — 큰 부품은 몇 분 걸려요(멈춘 것이 아니에요)", alive=cur != prev)
+                prev = cur
+                if time.time() - watch["log_t"] >= 60:          # 기록에도 1분마다 한 줄(어디서 오래 걸렸는지 나중에 알 수 있게)
+                    watch["log_t"] = time.time()
+                    self.st.log(f"    … {label}: 디스크에 푸는 중 {human(cur)} · {took(el)}째")
+        threading.Thread(target=beat, name="pip-beat", daemon=True).start()
+        try:
+            for raw in p.stdout:
+                line = raw.decode("utf-8", "replace").rstrip()
+                if not line:
+                    continue
+                self.st.log("    " + line[:300])
+                tail = (tail + [line])[-15:]
+                if line.startswith("Installing collected packages"):
+                    watch["phase"] = "install"
+                if line.startswith(("Processing ", "Building wheel", "Installing collected")):
+                    seen += 1
+                    nm = line.split()[1] if line.startswith("Processing") else ("부품을 디스크에 설치하는 중" if line.startswith("Installing") else line)
+                    self.st.progress(a + (b - a) * min(0.3, 0.3 * seen / max(1, count + 2)), f"{label}: {os.path.basename(nm)[:60]}")
+            rc = p.wait()
+        finally:
+            watch["on"] = False
+        self.st.log(f"    {label}: pip 끝(코드 {rc}) · {took(time.time() - watch['t0'])}")
         if rc != 0:
-            raise Fail(f"{label} 설치에 실패했어요. '다시 하기'를 눌러 주세요. 계속되면 기록 파일을 보내 주세요.", " / ".join(tail[-6:]))
+            text = " / ".join(tail[-6:])
+            if "No space left" in text or "Errno 28" in text:
+                raise Fail("디스크 공간이 모자라요. 공간을 비우고 '다시 하기'를 눌러 주세요.", text, 원인="disk")
+            if "WinError 5" in text or "WinError 32" in text or "PermissionError" in text or "Access is denied" in text:
+                raise Fail(f"{label} 을(를) 설치하다 파일을 쓰지 못했어요. 김비서가 켜져 있으면 끄고, 백신 알림을 확인한 뒤 '다시 하기'를 눌러 주세요.", text, 원인="file")
+            if "WinError 206" in text or "path too long" in text.lower() or "Filename too long" in text:
+                raise Fail("설치 폴더 경로가 너무 길어요. 설치 위치를 짧은 폴더(예: C 드라이브 바로 아래 폴더)로 바꿔서 다시 설치해 주세요.", text, 원인="file")
+            raise Fail(f"{label} 설치에 실패했어요. '다시 하기'를 눌러 주세요. 계속되면 '기록 보기'의 글을 보내 주세요.", text)
+
+    def try_import(self, py, probe, text):
+        """깔린 부품을 불러와 본다(큰 부품은 처음에 1~2분 — 백신 검사가 있으면 더). 그동안 지난 시간을 보여 줌 → (종료 코드, 오류 글)."""
+        p = subprocess.Popen([py, "-B", "-c", probe], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL, creationflags=NO_WINDOW)
+        t0 = time.time()
+        while True:
+            try:
+                err = p.communicate(timeout=3)[1]
+                break
+            except subprocess.TimeoutExpired:
+                el = time.time() - t0
+                # 10분까지는 '하는 중'으로 침. 그보다 길면 진전 없음으로 두어 설치 창이 알려 주게 함(끊지는 않고 계속 기다림)
+                self.st.progress(self.st.d.get("진행", 0) / 100, f"{text} · {took(el)}째(처음에는 1~2분 걸려요)", alive=el < 600)
+        return p.returncode, (err or b"").decode("utf-8", "replace")
 
     def env_ready(self, name, py, lock_path, probe):
         mark = os.path.join(os.path.dirname(py), f"kimbiseo_{name}_lock.txt")
         want = sha256_of(lock_path)
         if os.path.isfile(mark) and open(mark, encoding="utf-8").read().strip() == want:
-            r = subprocess.run([py, "-B", "-c", probe], capture_output=True, creationflags=NO_WINDOW)
-            if r.returncode == 0:
+            self.st.say(f"이미 깔린 {name} 부품을 확인하는 중이에요.")
+            rc, err = self.try_import(py, probe, f"이미 깔린 {name} 부품을 확인하는 중")
+            if rc == 0:
                 return True, mark, want
-            self.st.log(f"  {name}: 기록은 있는데 불러오기 시험 실패 → 다시 설치", r.stderr.decode("utf-8", "replace")[-300:])
+            self.st.log(f"  {name}: 기록은 있는데 불러오기 시험 실패 → 다시 설치", err[-300:])
         return False, mark, want
 
     def install_env(self, name, folder, lock_name, probe, frac):
@@ -548,11 +705,15 @@ class Installer:
         with open(req, "w", encoding="utf-8") as f:
             for x in pk:
                 f.write(f"{x['name']}=={x['version']} --hash=sha256:{x['sha256']}\n")
+        have = [os.path.join(self.wheels, x["file"]) for x in pk if os.path.isfile(os.path.join(self.wheels, x["file"]))]
+        got = sum(os.path.getsize(f) for f in have)
+        self.st.say(f"{name} 부품 {len(pk)}개를 다 받았어요({human(got)}). 이제 디스크에 풀어요 — 큰 부품이 있으면 몇 분 걸려요.")
         self.pip(py, ["install", "--no-index", "--find-links", self.wheels, "--no-deps", "--require-hashes", "--no-build-isolation",
-                      "-r", req], f"{name} 부품 설치", (mid, b), len(pk))
-        r = subprocess.run([py, "-B", "-c", probe], capture_output=True, creationflags=NO_WINDOW)
-        if r.returncode != 0:
-            raise Fail(f"{name} 부품을 설치했지만 불러오지 못했어요.", r.stderr.decode("utf-8", "replace")[-400:])
+                      "-r", req], f"{name} 부품 설치", (mid, b), len(pk), expect=unpacked_size(have))
+        self.st.say(f"{name} 부품이 잘 깔렸는지 불러와 보는 중이에요(처음에는 1~2분 걸릴 수 있어요).")
+        rc, err = self.try_import(py, probe, f"{name} 부품이 잘 깔렸는지 불러와 보는 중")
+        if rc != 0:
+            raise Fail(f"{name} 부품을 설치했지만 불러오지 못했어요. 백신이 파일을 지웠거나 막았을 수 있어요 — 백신 알림을 확인하고 '다시 하기'를 눌러 주세요.", err[-400:])
         with open(mark, "w", encoding="utf-8") as f:
             f.write(want)
         return f"{len(pk)}개"
@@ -560,6 +721,7 @@ class Installer:
     def do_packages(self):
         p = self.state["plan"]
         voice_lock = "voice-cuda.json" if p["torch"] == "cu128" else "voice-cpu.json"
+        self.st.say("파이썬 부품을 받아서 설치해요(본체 → 음성). 엔비디아 그래픽카드가 있으면 약 3GB 를 받아요.")
         r1 = self.install_env("본체", self.path("runtime", "python-app"), "app.json",
                               "import pipecat, fastapi, uvicorn, webview, aiortc, av, onnxruntime, anthropic, openai", (0.0, 0.3))
         r2 = self.install_env("음성", self.path("runtime", "python-voice"), voice_lock,
@@ -632,15 +794,15 @@ class Installer:
         dest = self.path("runtime", "electron")
         mark = os.path.join(dest, "kimbiseo_electron.txt")
         if os.path.isfile(os.path.join(dest, "electron.exe")) and os.path.isfile(mark) and open(mark, encoding="utf-8").read().strip() == e["version"]:
-            return "됨", f"이미 설치됨(Electron {e['version']})"
+            return "됨", f"이미 설치됨({e['version']})"
         zdest = os.path.join(self.dl, os.path.basename(e["url"]))
         manual = getattr(self.a, "file", "") or ""
-        if manual and not self.dry:                 # '받아 둔 파일로 넣기' — 사용자가 브라우저로 직접 받은 압축 파일
-            self.fetch.take_file(os.path.abspath(manual), zdest, e["sha256"], e["size"], "펫 실행 틀(Electron)")
-        z = self.fetch.get(e["url"], zdest, e["sha256"], e["size"], "펫 실행 틀(Electron)", (0, 0.85))
+        if manual and not self.dry:                 # '직접 넣기' — 사용자가 브라우저로 직접 받은 압축 파일
+            self.fetch.take_file(os.path.abspath(manual), zdest, e["sha256"], e["size"], "펫 프로그램 파일")
+        z = self.fetch.get(e["url"], zdest, e["sha256"], e["size"], "펫 프로그램 파일", (0, 0.85))
         if self.dry:
             return "됨", f"[시험] Electron {e['version']} 주소 확인"
-        self.st.progress(0.9, "푸는 중")
+        self.st.progress(0.9, "펫 프로그램 파일을 푸는 중")
         tmp = dest + ".새로"                        # 다 풀린 뒤에 바꿔 끼움 — 풀다가 멈춰도 반쯤 풀린 폴더가 '설치됨'으로 보이지 않게
         rmtree(tmp)
         try:
@@ -649,17 +811,17 @@ class Installer:
             rmtree_quiet(tmp)
             if isinstance(ex, OSError) and (getattr(ex, "errno", 0) == 28 or getattr(ex, "winerror", 0) == 112):
                 raise
-            raise Fail("펫 실행 틀을 풀지 못했어요. 백신이 파일을 막았을 수 있어요 — 백신의 실시간 검사 알림을 확인하고 '펫 다시 설치'를 눌러 주세요.",
+            raise Fail("펫 프로그램 파일을 풀지 못했어요. 백신이 막았을 수 있어요 — 백신 알림을 확인한 뒤 다시 해 주세요.",
                        f"{type(ex).__name__}: {ex}", 원인="file") from None
         if not os.path.isfile(os.path.join(tmp, "electron.exe")):
             rmtree_quiet(tmp)
-            raise Fail("펫 실행 틀을 풀었는데 실행 파일(electron.exe)이 없어요. 백신이 지웠을 수 있어요 — 백신의 검역소(격리 목록)를 확인해 주세요.",
+            raise Fail("펫 프로그램을 풀었는데 실행 파일이 없어요. 백신이 지웠을 수 있어요 — 백신의 격리 목록을 확인해 주세요.",
                        "electron.exe 없음", 원인="file")
         rmtree(dest)
         os.replace(tmp, dest)
         with open(mark, "w", encoding="utf-8") as f:
             f.write(e["version"])
-        return "됨", f"Electron {e['version']}"
+        return "됨", f"펫 프로그램 {e['version']}"
 
     def pet_help(self):
         """펫 실행 틀을 직접 받아 넣는 데 필요한 것(설치 창·설정 화면이 보여 줌)."""
@@ -752,7 +914,7 @@ class Installer:
         self.state["shortcuts"] = links
         if not self.a.no_register:
             self.register(un_args, icon)
-        # 받는 동안만 쓴 것 치우기(다시 받을 수 있음). 빠진 단계(펫)가 있으면 받다 만 파일은 남김 — '펫 다시 설치' 때 이어서 받게
+        # 받는 동안만 쓴 것 치우기(다시 받을 수 있음). 빠진 단계(펫)가 있으면 받다 만 파일은 남김 — '펫 다시 받기' 때 이어서 받게
         for d in ((self.wheels, self.path("install", "pipcache")) if self.skipped else (self.dl, self.wheels, self.path("install", "pipcache"))):
             rmtree_quiet(d)
         for f in os.listdir(self.path("install")):
@@ -783,6 +945,7 @@ class Installer:
     # ---- 돌리기
     def run(self):
         os.makedirs(self.path("install"), exist_ok=True)
+        self.st.heartbeat()
         self.state.update({"version": VERSION, "prefix": self.P, "data": self.D, "settings": self.settings_file(),
                            "display_name": self.a.display_name})
         py_step = self.st.step("python")
@@ -812,12 +975,13 @@ class Installer:
                           "실행": {"파이썬": self.path("runtime", "python-app", "pythonw.exe"), "작업폴더": self.path("src"),
                                  "인자": ["-B", "-X", "utf8", "-m", "app.launcher", "--settings", self.settings_file()]}})
         self.st.write(force=True)
-        self.st.log("==== 설치 끝")
+        self.st.log(f"==== 설치 끝 (전체 {took(time.time() - self.st.t0)})")
         return 0
 
     # ---- 설정 '두뇌 바꾸기' — Gemma 만 설치 / 지우기
     def run_gemma(self):
         os.makedirs(self.path("install"), exist_ok=True)
+        self.st.heartbeat()
         self.st.log(f"==== Gemma 설치 시작 (김비서 {VERSION})")
         for sid in ("python", "files", "packages", "pet"):
             self.st.end(sid, "건너뜀", "Gemma 만 설치")
@@ -904,6 +1068,7 @@ class Installer:
         """선택 단계(펫)가 실패 → 설치는 계속. 무엇이 빠졌고 어떻게 넣는지를 상태 파일 '주의'에 남김."""
         name = dict(STEPS)[sid]
         note = {"id": sid, "단계": name, "이유": why, "자세히": str(detail)[-800:], "기록": self.st.log_path, **(info or {})}
+        note["까닭"] = short_why(note.get("원인"), why)
         if sid == "pet":
             note["직접받기"] = self.pet_help()
         self.skipped[sid] = note
@@ -929,6 +1094,7 @@ class Installer:
             except OSError:
                 pass
             self.st.log("진단:", json.dumps({"윈도우": platform.version(), "파이썬": platform.python_version(), "원인": note.get("원인"),
+                                         "인증서": GM.tls_note(), "PC_시각": time.strftime("%Y-%m-%d %H:%M"),
                                          "써본_방식": note.get("방식"), "프록시_설정": sorted(px) if px else "없음",
                                          "프록시_자동설정": pac, "curl_있음": curl, "디스크_여유": human(free),
                                          "받는_곳": (note.get("주소") or "").split("/")[2] if note.get("주소") else ""}, ensure_ascii=False))
@@ -938,6 +1104,7 @@ class Installer:
     def fail(self, sid, why, detail, info=None):
         self.st.end(sid, "실패", why)
         err = {"id": sid, "단계": dict(STEPS)[sid], "이유": why, "자세히": str(detail)[-800:], "기록": self.st.log_path, **(info or {})}
+        err["까닭"] = short_why(err.get("원인"), why)
         self.st.d.update({"끝": True, "성공": False, "오류": err})
         self.st.write(force=True)
         self.st.log("!!!! 실패:", sid, why, "|", detail)
@@ -946,9 +1113,10 @@ class Installer:
         self.save_state()
         return 1
 
-    # ---- 펫 실행 틀만 다시 설치(설치 창 '펫 다시 설치'·'받아 둔 파일로 넣기' · 김비서 설정 → 펫)
+    # ---- 펫 실행 틀만 다시 설치(설치 창 '펫 다시 받기'·'직접 넣기' · 김비서 설정 → 펫)
     def run_pet(self):
         os.makedirs(self.path("install"), exist_ok=True)
+        self.st.heartbeat()
         self.st.log(f"==== 펫 다시 설치 시작 (김비서 {VERSION})" + (" · 받아 둔 파일로" if getattr(self.a, "file", "") else ""))
         for sid in ("python", "plan", "files", "packages", "brain", "models"):
             self.st.end(sid, "건너뜀", "펫만 설치")
@@ -961,7 +1129,7 @@ class Installer:
                 why, detail, info = self.explain(ex)
                 if sid == "pet":
                     info["직접받기"] = self.pet_help()
-                return self.fail(sid, why.replace("'다시 하기'", "'펫 다시 설치'"), detail, info)
+                return self.fail(sid, why.replace("'다시 하기'", "'펫 다시 받기'"), detail, info)
             state, text = r if isinstance(r, tuple) else ("됨", r or "")
             self.st.end(sid, state, f"{text} ({time.time() - t0:.0f}초)")
         self.state["skipped"] = [x for x in self.state.get("skipped") or [] if x != "pet"]

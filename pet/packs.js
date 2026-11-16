@@ -21,6 +21,23 @@ const LIM = { zip: 1.5e9, file: 100e6, total: 1.2e9, count: 3000, json: 2e6, rat
 
 class PackError extends Error { constructor(msg, code) { super(msg); this.code = code || 'bad'; } }
 
+const tls = require('tls');
+
+// 보안 연결: 프로그램에 든 뿌리 인증서(모질라 목록) + 윈도우 인증서 저장소의 뿌리를 둘 다 믿는다. 검증은 끄지 않는다.
+//   까닭: 펫(노드)은 제 뿌리 목록만 믿어서, 백신·회사 인터넷이 연결을 검사하는(자기 뿌리로 다시 서명하는) PC 에서는 옷 받기가
+//         '인증서 확인 실패'로 막혔다. 그런 뿌리는 윈도우 저장소에 들어 있으므로 그것도 같이 믿으면 받아진다.
+//   (설치기·업데이트 쪽은 반대로 윈도우 저장소만 믿던 것을 모질라 목록도 믿게 고침 — 0.1.12)
+function trustSystemRoots() {
+  try {
+    if (typeof tls.getCACertificates !== 'function' || typeof tls.setDefaultCACertificates !== 'function') return 0;
+    const base = tls.getCACertificates('default');
+    const all = [...new Set([...base, ...tls.getCACertificates('system')])];
+    if (all.length > base.length) tls.setDefaultCACertificates(all);
+    return all.length;
+  } catch (_) { return 0; }
+}
+const ROOTS = trustSystemRoots();
+
 // ---------------------------------------------------------------- zip 읽기(가운데 목록 기준)
 let CRC_T = null;
 function crc32(buf) {
@@ -291,7 +308,8 @@ function checkUrl(u, allowed) {
 // 받기 실패의 까닭을 쉬운 말로(펫 말풍선·옷 창에 그대로 나감)
 function netWhy(e) {
   const m = String((e && (e.code || '')) + ' ' + (e && e.message || ''));
-  if (/CERT|certificate|SSL|TLS/i.test(m)) return '보안 연결(인증서)을 확인하지 못했어요 — 백신·회사망이 연결을 검사하는 것 같아요';
+  if (/CERT_NOT_YET_VALID|CERT_HAS_EXPIRED/.test(m)) return 'PC 날짜·시계가 틀린 것 같아요 — 윈도우 시계를 맞춘 뒤 다시 해 주세요';
+  if (/CERT|certificate|SSL|TLS/i.test(m)) return '보안 인증서를 확인하지 못했어요 — 백신이나 회사·학교 인터넷이 연결을 검사하는 것 같아요';
   if (/ENOTFOUND|EAI_AGAIN/.test(m)) return '받는 곳의 주소를 찾지 못했어요 — 인터넷 연결을 확인해 주세요';
   if (/ETIMEDOUT|시간 초과/.test(m)) return '받는 곳이 응답하지 않거나 너무 느려요';
   if (/ECONNREFUSED|EACCES|ENETUNREACH|EHOSTUNREACH/.test(m)) return '이 PC 나 회사망이 받는 곳으로 가는 길을 막고 있어요';
@@ -449,4 +467,4 @@ function registerAssoc(exe, profile, log, appDir) {   // appDir = 묶지 않은 
   return true;
 }
 
-module.exports = { inspect, install, list, remove, getJson, getBytes, download, checkUrl, registerAssoc, insideDir, PackError, fileUrl, ID_RE, PUBKEYS, netWhy };
+module.exports = { inspect, install, list, remove, getJson, getBytes, download, checkUrl, registerAssoc, insideDir, PackError, fileUrl, ID_RE, PUBKEYS, netWhy, trustSystemRoots, ROOTS };

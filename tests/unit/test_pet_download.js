@@ -96,6 +96,13 @@ const srv = http.createServer((req, res) => {
   ok('허용 목록에 없는 주소는 받지 않음', !!err && /허용하지 않은 주소/.test(err.message), err && err.message);
 
   ok('까닭 말: 인증서', /인증서/.test(packs.netWhy({ code: 'UNABLE_TO_GET_ISSUER_CERT_LOCALLY', message: 'unable to get local issuer certificate' })));
+  ok('까닭 말: PC 시계가 틀림', /시계/.test(packs.netWhy({ code: 'CERT_NOT_YET_VALID', message: 'certificate is not yet valid' })));
+  {
+    const tls = require('tls');
+    const can = typeof tls.getCACertificates === 'function' && typeof tls.setDefaultCACertificates === 'function';
+    const base = can ? tls.getCACertificates('bundled').length : 0;
+    ok('보안 연결: 프로그램에 든 뿌리 + 윈도우 저장소의 뿌리를 둘 다 믿음(이 노드가 못 하면 건너뜀)', !can || (packs.ROOTS >= base && base > 100), { roots: packs.ROOTS, base });
+  }
   ok('까닭 말: 주소 못 찾음', /주소를 찾지/.test(packs.netWhy({ code: 'ENOTFOUND', message: 'getaddrinfo ENOTFOUND x' })));
   ok('까닭 말: 끊김', /끊겼/.test(packs.netWhy({ code: 'ECONNRESET', message: 'aborted' })));
 

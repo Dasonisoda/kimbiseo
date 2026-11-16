@@ -244,6 +244,27 @@ def test_swap(tmp, key):
     check("받아 둔 판 없으면 아무것도 안 바꿈", rc == 1 and U.read_version_file(os.path.join(prefix, "src")) == "0.1.0")
 
 
+def test_trusts_bundled_roots():
+    """업데이트 확인의 보안 연결: 윈도우 인증서 저장소에 뿌리가 없어도(깨끗한 윈도우) 뿌리 묶음(certifi)을 믿는다. 검증은 켜 둔다."""
+    import ssl
+    saved = (ssl.SSLContext.load_default_certs, ssl.SSLContext.set_default_verify_paths)
+    try:
+        ssl.SSLContext.load_default_certs = lambda self, purpose=ssl.Purpose.SERVER_AUTH: None
+        ssl.SSLContext.set_default_verify_paths = lambda self: None
+        UP._TLS.clear()
+        ctx = UP._ssl_context()
+        n = ctx.cert_store_stats().get("x509_ca", 0)
+        try:
+            import certifi  # noqa: F401
+            want = n > 100
+        except ImportError:
+            want = True          # 묶음이 없는 파이썬(시험 환경)에서는 건너뜀 — 설치된 김비서의 본체 부품에는 certifi 가 들어 있음
+        check("업데이트 받기: 윈도우 저장소가 비어 있어도 뿌리 묶음을 믿음 · 검증은 켜져 있음", want and ctx.verify_mode == ssl.CERT_REQUIRED and ctx.check_hostname is True, n)
+    finally:
+        ssl.SSLContext.load_default_certs, ssl.SSLContext.set_default_verify_paths = saved
+        UP._TLS.clear()
+
+
 def test_native_fallback(tmp):
     """파이썬이 인증서를 못 믿어 업데이트 정보를 못 받는 PC(윈도우 저장소에 깃허브 쪽 뿌리 인증서가 아직 없음) → 윈도우 내려받기로 대신."""
     import hashlib
@@ -289,6 +310,7 @@ def main():
     try:
         test_versions()
         test_urls()
+        test_trusts_bundled_roots()
         test_native_fallback(tmp)
         key, keys, doc, _src = test_sign(tmp)
         test_package(tmp, doc)

@@ -589,6 +589,19 @@ class Api(WinApi):
             log("펫 켜기 실패", repr(ex))
             return {"ok": False, "이유": str(ex)}
 
+    def open_pet_download(self, url):
+        """'직접 넣기 ①': 펫 프로그램 파일 주소를 기본 브라우저로 연다. 공식 배포처(깃허브 electron 릴리스) 주소만 연다."""
+        u = str(url or "")
+        if not u.startswith("https://github.com/electron/electron/releases/download/") or any(c in u for c in ' "\'<>|^&'):
+            log("브라우저 열기 거절(허용 안 된 주소)")
+            return False
+        try:
+            os.startfile(u)
+            return True
+        except OSError as ex:
+            log("브라우저 열기 실패", repr(ex))
+            return False
+
     def open_logs(self):
         """기록 폴더를 탐색기로 연다(문제가 생겼을 때 기록 파일을 찾기 쉽게)."""
         try:

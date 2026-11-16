@@ -59,8 +59,27 @@ class _Redirect(urllib.request.HTTPRedirectHandler):
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
+_TLS = {}
+
+
+def _ssl_context():
+    """보안 연결 설정: 윈도우 인증서 저장소 + 모질라 뿌리 묶음(certifi). 검증은 끄지 않는다.
+    왜: 파이썬은 윈도우 저장소에 '이미 들어 있는' 뿌리만 읽는데 윈도우는 뿌리를 처음 쓸 때에야 받아 넣는다 → 깃허브 쪽 뿌리가 아직 없는 PC 에서는
+        업데이트 확인이 '인증서 확인 실패'로 늘 안 됐다(설치기의 받기와 같은 까닭 — installer/get_models.py ssl_context 와 같은 방식)."""
+    import ssl
+    if "ctx" not in _TLS:
+        ctx = ssl.create_default_context()
+        try:
+            import certifi
+            ctx.load_verify_locations(cafile=certifi.where())
+        except Exception:  # noqa: BLE001  (묶음이 없으면 윈도우 저장소만 — 그래도 안 되면 아래 curl 길)
+            pass
+        _TLS["ctx"] = ctx
+    return _TLS["ctx"]
+
+
 def _open(url, timeout=30):
-    opener = urllib.request.build_opener(_Redirect())
+    opener = urllib.request.build_opener(_Redirect(), urllib.request.HTTPSHandler(context=_ssl_context()))
     req = urllib.request.Request(check_url(url), headers={"User-Agent": UA, "Accept": "*/*"})
     return opener.open(req, timeout=timeout)
 

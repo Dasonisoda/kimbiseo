@@ -6,6 +6,10 @@
 #   공통: --dest <모델 폴더>(기본 = 설정 '경로.모델', %LOCALAPPDATA%\KimBiseo\models) · --settings <설정.json> · --json
 #
 # - 이어 받기: 받는 중인 파일은 <파일>.part 로 두고, 끊기면 다음에 이어서 받음(서버가 Range 를 받으면).
+# - 보안 연결: 윈도우 인증서 저장소 + 모질라 뿌리 인증서 묶음(certifi — 설치 때는 pip 에 든 것)을 둘 다 믿음(ssl_context()).
+#   까닭: 파이썬은 윈도우 저장소에 '이미 들어 있는' 뿌리만 읽는데, 윈도우는 뿌리를 처음 쓸 때에야 받아 넣는다 → 새 PC·깨끗한 윈도우에서는
+#   깃허브 쪽 뿌리가 아직 없어 "CERTIFICATE_VERIFY_FAILED: unable to get local issuer certificate" 로 받기가 실패했다(0.1.11 실제 사용자 기록).
+#   인증서 검증을 끄는 길은 없다. 어느 길로 받든 받은 뒤 sha256 으로 확인한다.
 # - 다시 시도: 조금이라도 더 받아지는 동안은 계속 이어 받음(기다림 2·4·8…초). 파이썬으로 안 되면(인증서 확인 실패·프록시 자동 설정 등)
 #   해시로 확인하는 파일에 한해 윈도우에 든 내려받기(curl.exe → 파워셸)로 대신 받음. 실패하면 원인 종류를 가려 쉬운 말로 알림(WHY).
 # - 확인: 크기 + sha256(큰 파일) 또는 git_sha1(작은 파일, git blob 해시). 공식 해시가 빈 칸인 파일은
@@ -73,7 +77,58 @@ def _redirect_for(hosts=None):
     return _Redirect
 
 
-OPENER = urllib.request.build_opener(_redirect_for())
+def ca_bundle():
+    """모질라 뿌리 인증서 묶음(certifi 의 cacert.pem) 경로. 설치할 때는 막 넣은 pip 에 든 것, 설치 뒤에는 본체 부품의 것. 없으면 ''."""
+    import importlib
+    for mod in ("certifi", "pip._vendor.certifi"):
+        try:
+            path = importlib.import_module(mod).where()
+            if path and os.path.isfile(path):
+                return path
+        except Exception:  # noqa: BLE001  (없거나 못 읽으면 다음 것)
+            continue
+    return ""
+
+
+_TLS = {}
+
+
+def ssl_context():
+    """보안 연결 설정: 윈도우 인증서 저장소(회사·백신이 넣은 뿌리 포함) + 모질라 뿌리 묶음. 검증(인증서·이름 확인)은 끄지 않는다."""
+    import ssl
+    if "ctx" not in _TLS:
+        ctx = ssl.create_default_context()
+        bundle = ca_bundle()
+        if bundle:
+            try:
+                ctx.load_verify_locations(cafile=bundle)
+            except (OSError, ssl.SSLError):
+                bundle = ""
+        _TLS["ctx"], _TLS["bundle"] = ctx, bundle
+    return _TLS["ctx"]
+
+
+def tls_note():
+    """기록용: 어떤 뿌리 인증서를 믿고 있는지(경로는 파일 이름만)."""
+    ssl_context()
+    return "윈도우 저장소 + 묶음(" + os.path.basename(os.path.dirname(_TLS["bundle"])) + ")" if _TLS.get("bundle") else "윈도우 저장소만(묶음 없음)"
+
+
+def make_opener(hosts=None):
+    """정해 둔 곳만 따라가고(넘겨주기 검사), 위 보안 연결 설정을 쓰는 여는 도구."""
+    return urllib.request.build_opener(_redirect_for(hosts), urllib.request.HTTPSHandler(context=ssl_context()))
+
+
+class _LazyOpener:
+    """OPENER.open(...) — 처음 쓸 때 만든다(불러오기만 할 때는 인증서 묶음을 읽지 않게)."""
+
+    def open(self, *a, **k):
+        if "opener" not in _TLS:
+            _TLS["opener"] = make_opener()
+        return _TLS["opener"].open(*a, **k)
+
+
+OPENER = _LazyOpener()
 
 
 def file_hashes(path, want_git=False, progress=None, algo="sha256"):
@@ -172,18 +227,19 @@ NATIVE_ENV = "KIMBISEO_DOWNLOADER"    # 문제 해결용: python | curl | powers
 
 # 원인 종류 → 사용자에게 보여 줄 쉬운 말(설치 창·기록에 그대로 나감)
 WHY = {
-    "tls": "이 PC 의 인증서 목록으로는 내려받는 곳을 믿을 수 있는지 확인하지 못했어요(윈도우 인증서가 아직 갱신되지 않았거나, 백신·회사망이 보안 연결을 검사하는 경우).",
-    "dns": "내려받는 곳의 주소를 찾지 못했어요(인터넷 연결이나 DNS 문제).",
-    "timeout": "내려받는 곳이 응답하지 않거나 너무 느려요.",
-    "reset": "받는 도중에 연결이 끊겼어요.",
-    "blocked": "이 PC 나 공유기·회사망이 내려받는 곳으로 가는 길을 막고 있어요(방화벽·백신).",
-    "http403": "내려받는 곳이 요청을 거절했어요(403) — 회사·학교망 차단이거나 잠깐의 접속 제한일 수 있어요.",
-    "http404": "내려받을 파일이 그 주소에 없어요(404) — 새 설치 파일을 받아 주세요.",
-    "http429": "내려받는 곳이 '잠시 뒤에 다시'라고 했어요(접속이 몰림).",
-    "http5xx": "내려받는 곳 서버에 잠깐 문제가 있어요.",
-    "redirect": "허용하지 않은 주소로 넘겨져서 멈췄어요(회사망·보안 프로그램이 주소를 바꾸는 경우).",
-    "short": "받다가 끊겨 파일이 다 오지 않았어요.",
-    "file": "받은 파일을 디스크에 쓰지 못했어요(백신이 막았거나 폴더에 쓸 수 없음).",
+    "tls": "보안 인증서를 확인하지 못했어요(백신이나 회사·학교 인터넷이 연결을 검사하거나, PC 날짜·시계가 틀렸을 수 있어요).",
+    "clock": "PC 날짜·시계가 틀린 것 같아요. 윈도우 시계를 맞춘 뒤 다시 해 주세요.",
+    "dns": "인터넷 연결이 안 돼요(받는 곳 주소를 찾지 못했어요).",
+    "timeout": "받는 곳이 응답하지 않아요(인터넷이 느리거나 막혀 있어요).",
+    "reset": "받는 도중에 자꾸 끊겨요.",
+    "blocked": "인터넷에서 받는 길이 막혀 있어요(회사·학교 인터넷이나 백신 때문일 수 있어요).",
+    "http403": "받는 곳에서 거절했어요(회사·학교 인터넷이 막았을 수 있어요).",
+    "http404": "받을 파일을 찾지 못했어요. 새 설치 파일을 받아 주세요.",
+    "http429": "받는 곳이 붐벼요. 조금 뒤에 다시 해 주세요.",
+    "http5xx": "받는 곳에 잠깐 문제가 있어요. 조금 뒤에 다시 해 주세요.",
+    "redirect": "회사 인터넷이나 보안 프로그램이 받는 주소를 바꿔서 멈췄어요.",
+    "short": "받는 도중에 끊겼어요.",
+    "file": "받은 파일을 저장하지 못했어요(백신이 막았을 수 있어요).",
     "net": "인터넷 연결에 문제가 있어요.",
 }
 
@@ -208,6 +264,8 @@ def classify(ex):
     if isinstance(ex, urllib.error.HTTPError):
         c = ex.code
         return "http403" if c in (401, 403, 407) else "http404" if c in (404, 410) else "http429" if c == 429 else "http5xx" if c >= 500 else "net"
+    if "certificate is not yet valid" in text or "certificate has expired" in text:
+        return "clock"          # 인증서 날짜가 안 맞음 = 거의 언제나 PC 날짜·시계가 틀린 것
     for e in (ex, reason):
         if isinstance(e, ssl.SSLCertVerificationError):
             return "tls"
@@ -363,6 +421,7 @@ def _fetch_powershell(url, part, size, say, progress):
     flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
     ps = ("$ProgressPreference='SilentlyContinue';$ErrorActionPreference='Stop';"
           "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12;"
+          "try{[Net.WebRequest]::DefaultWebProxy.Credentials=[Net.CredentialCache]::DefaultNetworkCredentials}catch{};"      # 회사망 프록시(윈도우 로그인으로 인증)
           "Invoke-WebRequest -UseBasicParsing -Uri $env:K_URL -OutFile $env:K_OUT -UserAgent $env:K_UA")
     why = ""
     for _round in range(2):
@@ -399,7 +458,7 @@ def download(url, dest, size=None, tries=None, say=print, progress=None, hosts=N
     실패하면 DownloadError(원인 종류·쉬운 말·기술 내용). 디스크가 꽉 찼으면 OSError(28)."""
     if not host_ok(url, hosts):
         raise DownloadError("redirect", f"허용하지 않은 주소: {url}")
-    opener = urllib.request.build_opener(_redirect_for(hosts)) if hosts else OPENER
+    opener = make_opener(hosts) if hosts else OPENER
     part = dest + ".part"
     os.makedirs(os.path.dirname(dest), exist_ok=True)
     forced = (os.environ.get(NATIVE_ENV) or "").strip().lower()
@@ -431,7 +490,7 @@ def download(url, dest, size=None, tries=None, say=print, progress=None, hosts=N
                     except (TypeError, ValueError, AttributeError):
                         pass
                 say(f"    {attempt}번째 시도 실패({last_kind}): {ex} — 받은 것 {human(have)}")
-                if last_kind in ("tls", "http404", "redirect") or (last_kind == "http403" and stuck >= 2) or stuck >= limit:
+                if last_kind in ("tls", "clock", "http404", "redirect") or (last_kind == "http403" and stuck >= 2) or stuck >= limit:
                     break
                 say(f"    {wait}초 뒤 이어서 받음")
                 time.sleep(wait)

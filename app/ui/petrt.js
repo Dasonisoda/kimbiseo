@@ -1,11 +1,12 @@
-// 펫 프로그램(펫 실행 틀) — 설치할 때 '펫' 단계를 받지 못했어도 김비서(대화)는 먼저 쓰고, 펫은 여기서 나중에 넣는다.
+// 펫 프로그램 — 설치할 때 '펫' 단계를 받지 못했어도 김비서(대화)는 먼저 쓰고, 펫은 여기서 나중에 넣는다.
 //   · 대화 화면 위 알림(#petrt-box): 펫을 쓰기로 했는데 펫 프로그램이 없을 때만 보임
-//   · 설정 → 펫 의 '펫 프로그램' 칸: 다시 받기 / 받아 둔 파일로 넣기 / 직접 받을 주소 복사 / 기록 폴더 열기
+//   · 설정 → 펫 의 '펫 프로그램' 칸: '펫 다시 받기' · '직접 넣기'(① 브라우저로 받기 → ② 받은 파일 고르기) — 설치 창과 같은 말·같은 순서
 //   받기·확인·풀기는 본체가 설치 프로그램(installer/setup_core.py pet-install)을 따로 띄워서 한다. 화면은 1초마다 상태만 읽는다.
 "use strict";
 const PetRuntime = {
   v: null,
   timer: null,
+  manualOpen: false,      // '직접 넣기' 순서 칸을 펼쳤는지
 
   winApi() { return (window.pywebview && window.pywebview.api) || null; },
 
@@ -52,21 +53,36 @@ const PetRuntime = {
       return;
     }
     const help = v["직접받기"] || {};
-    body.append(notice("warn", "펫 프로그램이 없어요", "설치할 때 펫 프로그램" + (help["크기_글"] ? `(약 ${help["크기_글"]})` : "") + "을 받지 못했어요. 대화는 그대로 쓸 수 있고, 펫은 아래에서 다시 받을 수 있어요."));
-    const row = h("div", {class: "row"});
-    const get = h("button", {class: "btn primary", type: "button", id: "set-petrt-get", text: "펫 프로그램 받기", onclick: () => this.install(null, body)});
-    const file = h("button", {class: "btn", type: "button", id: "set-petrt-file", text: "받아 둔 파일로 넣기", onclick: () => this.pickFile(body)});
-    row.append(get, file);
-    if (help["주소"]) row.appendChild(h("button", {class: "btn", type: "button", id: "set-petrt-copy", text: "받을 주소 복사", onclick: () => this.copy(help["주소"], st)}));
     const a = this.winApi();
-    if (a && typeof a.open_logs === "function") row.appendChild(h("button", {class: "btn", type: "button", id: "set-petrt-logs", text: "기록 폴더 열기", onclick: () => a.open_logs()}));
-    body.append(row, st);
-    if (help["주소"]) {
-      body.appendChild(h("p", {class: "hint", id: "set-petrt-how", text: "계속 받아지지 않으면: ① '받을 주소 복사'를 눌러 크롬·엣지 주소창에 붙여 넣어 받고(" + (help["파일"] || "") + ") ② '받아 둔 파일로 넣기'로 그 파일을 고르면 돼요. 회사·학교 인터넷이면 휴대폰 핫스팟으로 바꿔 보세요."}));
+    const failed = !v["설치중"] && prog && prog["끝"] && !prog["성공"] && prog["오류"];
+    if (failed) {
+      const e = prog["오류"];
+      body.append(notice("bad", "펫을 이번에도 받지 못했어요", "까닭: " + (e["까닭"] || e["이유"] || "") + " 다시 눌러 보거나 '직접 넣기'를 써 주세요."));
+    } else {
+      body.append(notice("warn", "펫이 아직 없어요", "설치할 때 펫을 받지 못했어요. 대화는 그대로 쓸 수 있어요."));
     }
-    if (v["설치중"]) { get.disabled = file.disabled = true; st.textContent = (prog && prog["글"]) || "펫 프로그램을 받는 중이에요."; }
-    else if (prog && prog["끝"] && !prog["성공"] && prog["오류"]) {
-      body.appendChild(notice("bad", "펫 프로그램을 설치하지 못했어요", (prog["오류"]["이유"] || "") + (v["기록폴더"] ? ` (기록: ${v["기록폴더"]}\\install.log)` : "")));
+    const row = h("div", {class: "row"});
+    const get = h("button", {class: "btn primary", type: "button", id: "set-petrt-get", text: "펫 다시 받기", onclick: () => this.install(null, body)});
+    row.append(get);
+    const man = h("button", {class: "btn", type: "button", id: "set-petrt-manual", text: "직접 넣기", onclick: () => { this.manualOpen = !this.manualOpen; this.drawSection(body); }});
+    if (help["주소"]) row.append(man);
+    if (failed && a && typeof a.open_logs === "function") row.appendChild(h("button", {class: "btn", type: "button", id: "set-petrt-logs", text: "기록 폴더 열기", onclick: () => a.open_logs()}));
+    body.append(row, st);
+    let b1 = null, file = null;
+    if (help["주소"] && this.manualOpen) {
+      // 직접 넣기: 두 단추를 차례로
+      b1 = h("button", {class: "btn", type: "button", id: "set-petrt-browser", text: "① 브라우저로 펫 파일 받기", onclick: () => this.openBrowser(help["주소"], st)});
+      file = h("button", {class: "btn", type: "button", id: "set-petrt-file", text: "② 받은 파일 고르기", onclick: () => this.pickFile(body)});
+      body.append(h("div", {class: "set-sub", id: "set-petrt-how"},
+        h("p", {class: "hint", text: "인터넷에서 펫 파일이 받아지지 않을 때 쓰는 방법이에요. 두 단추를 차례로 눌러 주세요."}),
+        h("div", {class: "row"}, b1, file),
+        h("p", {class: "hint", text: "①은 브라우저가 열리고 파일을 받아요" + (help["크기_글"] ? `(약 ${help["크기_글"]})` : "") + ". 이름을 바꾸거나 압축을 풀지 마세요. ②는 보통 '다운로드' 폴더에 있어요(" + (help["파일"] || "") + ")."}),
+        h("div", {class: "row"}, h("button", {class: "btn ghost", type: "button", id: "set-petrt-copy", text: "주소 복사", onclick: () => this.copy(help["주소"], st)}))));
+    }
+    if (v["설치중"]) {
+      get.disabled = man.disabled = true;
+      if (b1) b1.disabled = file.disabled = true;
+      st.textContent = (prog && prog["글"]) || "펫을 받는 중이에요.";
     }
   },
 
@@ -75,8 +91,16 @@ const PetRuntime = {
   },
 
   async copy(url, st) {
-    try { await navigator.clipboard.writeText(url); st.textContent = "주소를 복사했어요. 브라우저 주소창에 붙여 넣으면 받아져요."; }
+    try { await navigator.clipboard.writeText(url); st.textContent = "주소를 복사했어요. 브라우저 주소창에 붙여 넣으면 받아져요(다른 PC 에서 받아 옮겨도 돼요)."; }
     catch (_) { st.textContent = url; }
+  },
+
+  async openBrowser(url, st) {
+    const a = this.winApi();
+    let ok = false;
+    if (a && typeof a.open_pet_download === "function") { try { ok = await a.open_pet_download(url); } catch (_) { ok = false; } }
+    if (ok) st.textContent = "브라우저에서 받는 중이에요. 다 받으면 ②를 눌러 주세요.";
+    else this.copy(url, st);      // 브라우저를 못 열면 주소를 복사해 줌
   },
 
   async pickFile(body) {
@@ -90,7 +114,7 @@ const PetRuntime = {
   async install(file, body) {
     try {
       await api("/api/pet/install", file ? {"파일": file} : {});
-    } catch (e) { toast("펫 프로그램 설치를 시작하지 못했어요: " + e.message, 7000); return; }
+    } catch (e) { toast("펫 받기를 시작하지 못했어요: " + e.message, 7000); return; }
     await this.load();
     if (body && body.isConnected) this.drawSection(body);
     this.poll(body);
@@ -106,7 +130,7 @@ const PetRuntime = {
       if (this.v && !this.v["설치중"]) {
         clearInterval(this.timer);
         const p = this.v["진행"];
-        if (was && p && p["끝"] && p["성공"]) { toast("펫 프로그램을 설치했어요.", 5000); this.start(document.getElementById("set-petrt-state")); }
+        if (was && p && p["끝"] && p["성공"]) { this.manualOpen = false; toast("펫을 설치했어요.", 5000); this.start(document.getElementById("set-petrt-state")); }
       }
     }, 1000);
   },

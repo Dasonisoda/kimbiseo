@@ -179,6 +179,7 @@ input[type="text"], input[type="password"], input[type="url"], select {
 .set-tabs .btn { min-height: 40px; padding: 0 4px; font-size: .933rem; }
 .set-sec { padding: 12px 0; border-bottom: 1px solid var(--line2); }
 .set-sec h2 { margin: 0 0 4px; font-size: 1rem; font-weight: 500; }
+.set-sub { margin: 8px 0 0; padding: 8px 12px; border: 1px solid var(--line); border-radius: 12px; }
 .when { display: inline-block; font-size: .8rem; font-weight: 500; padding: 0 8px; line-height: 20px; border-radius: 8px; margin-left: 8px; vertical-align: middle; }
 .when.now { background: rgba(91, 209, 122, .12); color: var(--green); }
 .when.next { background: var(--accent-soft); color: var(--accent-ink); }
