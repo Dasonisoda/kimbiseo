@@ -35,7 +35,7 @@ function readJson(req) {
 
 /* 펫 신호 HTTP 입구 — 이 컴퓨터 안(127.0.0.1)에서만 받음. 김비서 본체(app/pet_link/face.py)가 여기로 표정·입·동작을 보냄.
    POST /speak {"text","rate","wait","expr"}  /expr {"name","seconds"}  /mouth {"level","shape"}  /talk {"on"}  /bubble {"text","seconds"}
-        /motion {"name"}  /emotion {"name"}  /skin {"id","temp"}  /packs/auto {}(옷 받기 동의)       GET /status /emotions /outfits /extras /dances
+        /motion {"name"}  /emotion {"name"}  /skin {"id","temp"}  /size {"percent"}  /packs/auto {}(옷 받기 동의)       GET /status /emotions /outfits /extras /dances
    지키는 것: 127.0.0.1 에만 열기 · Host 머리글이 127.0.0.1/localhost(:포트) 가 아니면 거절(DNS 리바인딩 막기) ·
              Origin 머리글이 있으면 거절(웹페이지가 몰래 부르는 것 막기) · JSON 만 · 본문 8KB · 문장 1~300자
    포트 = 17961(쓰는 중이면 +1~+9, 실제 번호는 프로필 폴더 speak_port.txt) */
@@ -52,8 +52,8 @@ function startServer(h, basePort = 17961) {
         if (req.method === 'GET' && url === '/outfits') return send(res, 200, { ok: true, ...(h.packs ? h.packs() : {}) });
         if (req.method === 'GET' && url === '/extras') return send(res, 200, { ok: true, ...(h.extras ? h.extras() : { motions: [], dances: [] }) });
         if (req.method === 'GET' && url === '/dances') return send(res, 200, { ok: true, dances: h.dances ? h.dances() : [] });
-        if (req.method === 'GET' && url === '/status') return send(res, 200, { ok: true, ...h.status(), inputs: ['/speak', '/expr', '/mouth', '/lip', '/bubble', '/motion', '/skin', '/emotion', '/talk', '/packs/auto'] });
-        if (!['/speak', '/expr', '/mouth', '/lip', '/bubble', '/motion', '/skin', '/emotion', '/talk', '/packs/auto'].includes(url)) return send(res, 404, { ok: false, error: '없는 주소' });
+        if (req.method === 'GET' && url === '/status') return send(res, 200, { ok: true, ...h.status(), inputs: ['/speak', '/expr', '/mouth', '/lip', '/bubble', '/motion', '/skin', '/emotion', '/talk', '/packs/auto', '/size'] });
+        if (!['/speak', '/expr', '/mouth', '/lip', '/bubble', '/motion', '/skin', '/emotion', '/talk', '/packs/auto', '/size'].includes(url)) return send(res, 404, { ok: false, error: '없는 주소' });
         if (req.method !== 'POST') return send(res, 405, { ok: false, error: 'POST 만' });
         if (!/^application\/json\s*(;|$)/i.test(req.headers['content-type'] || '')) return send(res, 415, { ok: false, error: 'Content-Type: application/json 만' });
         if (+(req.headers['content-length'] || 0) > MAX_BODY) { res.setHeader('Connection', 'close'); return send(res, 413, { ok: false, error: '본문이 너무 큼(8KB 까지)' }); }
@@ -92,6 +92,11 @@ function startServer(h, basePort = 17961) {
           if (!h.autoPack) return send(res, 404, { ok: false, error: '없는 주소' });
           const r = h.autoPack();
           return send(res, r.ok ? 200 : 409, r);
+        }
+        if (url === '/size') {   // 펫 크기(세밀): {"percent": 50~200} — 100 = '보통'
+          const pct = Number(body.percent);
+          if (!h.size || !Number.isFinite(pct) || pct < 50 || pct > 200) return send(res, 400, { ok: false, error: '크기는 50~200(퍼센트)' });
+          return send(res, 200, h.size(Math.round(pct)));
         }
         if (url === '/skin') {
           const id = typeof body.id === 'string' ? body.id.trim().slice(0, 40) : '';

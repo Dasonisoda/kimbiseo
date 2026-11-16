@@ -16,6 +16,7 @@ const fs = require('fs');
 const { Tts, VoiceServer } = require('./speech');
 const { startServer } = require('./server');
 const packs = require('./packs');
+const G = require('./geometry');   // 자리·크기 계산(화면 목록만 받아 계산 — 시험: tests/unit/test_pet_geometry.js)
 const MOTION_NAMES = require('./renderer/real/motion_names.js');
 
 const argVal = k => { const a = process.argv.find(x => x.startsWith('--' + k + '=')); return a ? a.slice(k.length + 3) : null; };
@@ -64,6 +65,7 @@ const DEFAULTS = { skin: null, size: '보통', onTop: true, x: null, y: null, mu
 let S = { ...DEFAULTS };
 try { S = { ...DEFAULTS, ...JSON.parse(fs.readFileSync(SETTINGS, 'utf8')) }; } catch (e) { /* 처음 실행 */ }
 if (!SIZES[S.size]) S.size = DEFAULTS.size;
+if (!(Number.isFinite(S.sizePx) && S.sizePx >= G.pctToPx(G.PCT_MIN) && S.sizePx <= G.pctToPx(G.PCT_MAX))) S.sizePx = null;   // 세밀 크기(없으면 단계 크기)
 if (!MUSIC_LEVELS.includes(S.musicVolume)) S.musicVolume = '보통';
 const PACK_SOURCE = String(argVal('pack-source') || S.packSource || CONFIG.packs_catalog || '').trim();
 const PACK_BACKUP = String(CONFIG.packs_catalog_backup || '').trim();   // 첫 주소가 안 될 때만(공개판 = 본 저장소 최신 릴리스의 옛 packs.json)
@@ -112,39 +114,28 @@ const env = {
   virtual: VS ? { cursor: { x: Math.round(VS.x + VS.width / 2), y: Math.round(VS.y + VS.height / 2) }, area: VS } : null,
   cursor() { return this.virtual ? { ...this.virtual.cursor } : screen.getCursorScreenPoint(); },
   workAreaAt(pt) { return this.virtual ? this.virtual.area : screen.getDisplayNearestPoint(pt).workArea; },
-  allAreas() { return this.virtual ? [this.virtual.area] : screen.getAllDisplays().map(d => d.workArea); },
+  // 화면(작업 영역) 목록 — 주 화면이 맨 앞. id·배율도 같이(자리 기억에 씀)
+  allAreas() {
+    if (this.virtual) return [{ id: 0, ...this.virtual.area, scale: 1, primary: true }];
+    const pid = screen.getPrimaryDisplay().id;
+    return G.primaryFirst(screen.getAllDisplays().map(d => ({ id: d.id, ...d.workArea, scale: d.scaleFactor, primary: d.id === pid })));
+  },
 };
 const pos = { x: S.x, y: S.y };
 function petSize() {
   const wa = env.workAreaAt(pos.x !== null ? { x: pos.x, y: pos.y } : env.cursor());
-  const h = Math.min(SIZES[S.size], wa.height);
+  const h = Math.min(S.sizePx || SIZES[S.size], wa.height);
   return { w: h, h };   // 정사각(눕기 클립 폭까지 들어가게)
 }
-function defaultPos(sz) {
-  const wa = env.allAreas()[0];
-  return { x: wa.x + wa.width - sz.w - 40, y: wa.y + wa.height - sz.h };
+const defaultPos = sz => G.defaultPos(sz, env.allAreas());
+const visibleEnough = (x, y, sz) => G.visibleEnough(x, y, sz, env.allAreas());
+const nearestArea = (cx, cy) => G.nearestArea(cx, cy, env.allAreas());
+const clampPos = (x, y, sz) => G.clampPos(x, y, sz, env.allAreas());
+// 지금 자리를 기억(좌표 + 어느 화면의 어디쯤) — 저장은 부르는 쪽이
+function keepPos() {
+  S.x = pos.x; S.y = pos.y;
+  try { S.disp = G.remember(pos.x, pos.y, petSize(), env.allAreas()).disp; } catch (e) { /* 화면 목록을 못 읽으면 좌표만 */ }
 }
-function visibleEnough(x, y, sz) {
-  const cx = x + sz.w / 2, cy = y + sz.h * 0.55;
-  return env.allAreas().some(a => cx >= a.x && cx < a.x + a.width && cy >= a.y && cy < a.y + a.height);
-}
-function nearestArea(cx, cy) {
-  let best = null, bd = Infinity;
-  for (const a of env.allAreas()) {
-    const dx = Math.max(a.x - cx, 0, cx - (a.x + a.width)), dy = Math.max(a.y - cy, 0, cy - (a.y + a.height));
-    if (dx * dx + dy * dy < bd) { bd = dx * dx + dy * dy; best = a; }
-  }
-  return best;
-}
-function clampPos(x, y, sz) {    // 어느 화면에서든 캐릭터가 적어도 1/3 은 보이게
-  const best = nearestArea(x + sz.w / 2, y + sz.h / 2);
-  const mx = sz.w / 3, my = sz.h / 3;
-  return {
-    x: Math.round(Math.min(Math.max(x, best.x - sz.w + mx), best.x + best.width - mx)),
-    y: Math.round(Math.min(Math.max(y, best.y - sz.h * 0.25), best.y + best.height - my)),
-  };
-}
-
 // ---------------------------------------------------------------- GPU 상태·그리기 방식
 // 그리기: 기본 = 캔버스(영상을 창 픽셀 크기로 고화질로 줄여 그림 — GPU 가속이 없는 PC 에서도 가장자리가 안 깨짐). settings.json "draw":"video" 또는 --draw=video 로 되돌림.
 const GPU = { comp: null, soft: null, deaths: 0, lastDeath: '', drawNow: null };
@@ -193,7 +184,9 @@ function guardContents(wc, name) {
 }
 function createPet() {
   const sz = petSize();
-  if (pos.x === null || pos.y === null || !visibleEnough(pos.x, pos.y, sz)) Object.assign(pos, defaultPos(sz));
+  const at = G.restore({ x: pos.x, y: pos.y, disp: S.disp }, sz, env.allAreas());   // 기억한 화면이 없거나 배치가 바뀌었으면 보이는 곳으로
+  pos.x = at.x; pos.y = at.y;
+  log(`펫 자리: ${at.why} (${at.x},${at.y}) · 화면 ${env.allAreas().map(a => `${a.width}x${a.height}@${a.x},${a.y}×${a.scale}`).join(' | ')}`);
   pet = new BrowserWindow({
     x: pos.x, y: pos.y, width: sz.w, height: sz.h, useContentSize: true,
     show: false, frame: false, transparent: true, backgroundColor: '#00000000', hasShadow: false,
@@ -252,12 +245,27 @@ function createMenu() {
   menu.on('closed', () => { menu = null; });
 }
 
+// 세밀 크기: 퍼센트(50~200, 100 = '보통'). 단계 크기와 같은 값이면 그 단계로 표시
+function sizePctNow() { return G.pxToPct(S.sizePx || SIZES[S.size]); }
+function applySizePct(pct) {
+  const old = petSize();
+  const px = G.pctToPx(pct);
+  const named = Object.keys(SIZES).find(k => SIZES[k] === px);
+  if (named) { S.size = named; S.sizePx = null; } else S.sizePx = px;
+  const sz = petSize();
+  const p = G.resizeKeepFeet(pos.x, pos.y, old, sz, env.allAreas());
+  setPetBounds(p.x, p.y, sz);
+  keepPos();
+  saveSettings();
+  menuSend('state', state());
+  return { ok: true, sizePct: sizePctNow(), sizePx: sz.h, size: S.sizePx ? null : S.size };
+}
 function outfitsState() {
   return PACKS.map(p => ({ id: p.id, name: p.name, img: p.img, version: p.version, signed: p.signed, songs: songsOf(p) }));
 }
 function state() {
   return { version: VERSION, outfits: outfitsState(), sizes: Object.keys(SIZES), skin: hasOutfit() ? S.skin : null,
-    size: S.size, onTop: S.onTop, speaking: !!current, queue: speakQueue.length, port: httpPort,
+    size: S.sizePx ? null : S.size, sizePct: sizePctNow(), sizePx: S.sizePx || SIZES[S.size], sizeRange: [G.PCT_MIN, G.PCT_MAX], onTop: S.onTop, speaking: !!current, queue: speakQueue.length, port: httpPort,
     musicVolume: S.musicVolume, musicLevels: DANCE_MUSIC ? MUSIC_LEVELS : [], danceMusic: DANCE_MUSIC };
 }
 
@@ -291,11 +299,11 @@ function hideMenu() {
 function applySize(name) {
   if (!SIZES[name]) return;
   const old = petSize();
-  S.size = name;
+  S.size = name; S.sizePx = null;
   const sz = petSize();
-  const p = clampPos(Math.round(pos.x + old.w / 2 - sz.w / 2), Math.round(pos.y + old.h - sz.h), sz);   // 발 위치(아래 가운데) 그대로
+  const p = G.resizeKeepFeet(pos.x, pos.y, old, sz, env.allAreas());   // 발 위치(아래 가운데) 그대로
   setPetBounds(p.x, p.y, sz);
-  S.x = pos.x; S.y = pos.y;
+  keepPos();
   saveSettings();
 }
 function wear(id, temp) {
@@ -308,6 +316,7 @@ function pick(type, value, temp) {
   log('메뉴: ' + type + ' ' + (value ?? '') + (temp ? ' (잠깐, 저장 안 함)' : ''));
   if (type === 'skin') wear(value, temp);
   else if (type === 'size') applySize(value);
+  else if (type === 'size-step') applySizePct(sizePctNow() + (value === 'up' ? 5 : -5));     // 메뉴의 '조금 작게/조금 크게'
   else if (type === 'music') { if (MUSIC_LEVELS.includes(value)) { S.musicVolume = value; saveSettings(); petSend('music-volume', value); } }
   else if (type === 'ontop') {
     S.onTop = !!value;
@@ -317,7 +326,7 @@ function pick(type, value, temp) {
   else if (type === 'speak-test') { hideMenu(); speak(TEST_LINE, 0, '기쁨', false).catch(e => log('말하기 시험 실패 ' + e.message)); }
   else if (type === 'wardrobe') { hideMenu(); openWardrobe(value === 'get' ? 'get' : 'mine'); }
   else if (type === 'pack-file') { hideMenu(); addPackByDialog(); }
-  else if (type === 'home') { const sz = petSize(), p = defaultPos(sz); setPetBounds(p.x, p.y, sz); S.x = p.x; S.y = p.y; saveSettings(); }
+  else if (type === 'home') { const sz = petSize(), p = defaultPos(sz); setPetBounds(p.x, p.y, sz); keepPos(); saveSettings(); }
   else if (type === 'close') hideMenu();
   else if (type === 'quit') { hideMenu(); app.quit(); return; }
   menuSend('state', state());
@@ -363,7 +372,7 @@ function dragEnd() {
   clearInterval(drag.timer);
   const moved = drag.moved;
   drag = null;
-  if (moved >= 5) { S.x = pos.x; S.y = pos.y; saveSettings(); }
+  if (moved >= 5) { keepPos(); saveSettings(); }
   return moved;
 }
 
@@ -462,13 +471,32 @@ ipcMain.handle('move-by', (e, d) => {
   if (dx < 0) nx = Math.max(nx, Math.min(wb.min, pos.x)); else if (dx > 0) nx = Math.min(nx, Math.max(wb.max, pos.x));
   const p = clampPos(Math.round(nx), Math.round(pos.y + dy), sz);
   const mx = p.x - pos.x, my = p.y - pos.y;
-  if (mx || my) { setPetBounds(p.x, p.y, sz); S.x = pos.x; S.y = pos.y; clearTimeout(moveSaveTimer); moveSaveTimer = setTimeout(saveSettings, 2000); }
+  if (mx || my) { setPetBounds(p.x, p.y, sz); keepPos(); clearTimeout(moveSaveTimer); moveSaveTimer = setTimeout(saveSettings, 2000); }
   return { dx: mx, dy: my, roomL: pos.x - wb.min, roomR: wb.max - pos.x };
 });
+// 화면(모니터)을 꽂거나 빼거나 배율·배치를 바꿨을 때: 윈도우가 창을 옮기거나 크기를 바꿔 놓았을 수 있다.
+//   ① 진짜 창 자리를 다시 읽어 pos 를 맞춤(안 맞으면 누르는 자리·말풍선이 어긋남) ② 기억한 화면이 다시 생겼으면 기억한 자리로, 화면 밖이면 보이는 곳으로
+//   ③ 크기를 다시 정함(그 화면보다 크지 않게). 이때 옮긴 자리는 기억에 덮어쓰지 않는다 — 뺐던 모니터를 다시 꽂으면 원래 자리로 돌아가게.
+let dispTimer = null, displaced = false;
+function onDisplaysChanged(why) {
+  if (!pet || pet.isDestroyed() || drag) return;
+  const b = pet.getBounds();
+  pos.x = b.x; pos.y = b.y;
+  const sz = petSize(), areas = env.allAreas();
+  const at = G.restore({ x: S.x, y: S.y, disp: S.disp }, sz, areas);
+  const back = displaced && /그대로/.test(at.why);                       // 기억한 화면이 돌아옴
+  let p = { x: pos.x, y: pos.y };
+  if (back || !G.visibleEnough(pos.x, pos.y, sz, areas)) { p = { x: at.x, y: at.y }; displaced = !/그대로/.test(at.why); }
+  else p = G.clampPos(pos.x, pos.y, sz, areas);
+  log(`화면 바뀜(${why}): 창 (${b.x},${b.y} ${b.width}x${b.height}) → (${p.x},${p.y} ${sz.w}x${sz.h}) · ${at.why} · 화면 ${areas.length}개`);
+  setPetBounds(p.x, p.y, sz);
+  petSend('moved', { dx: p.x - b.x, dy: p.y - b.y });
+}
 // 3초마다 펫 창이 화면 안에 충분히 보이는지 보고, 아니면 보이는 곳으로 되돌림(끄는 중엔 안 함)
 function ensureVisible() {
   if (!pet || pet.isDestroyed() || drag) return;
   const b = pet.getBounds(), cx = b.x + b.width / 2;
+  if (b.x !== pos.x || b.y !== pos.y) { log(`창 자리가 기억과 다름 (${pos.x},${pos.y}) → 진짜 자리 (${b.x},${b.y}) 로 맞춤`); pos.x = b.x; pos.y = b.y; }
   const ok = env.allAreas().some(a => cx >= a.x && cx < a.x + a.width && (Math.min(b.y + b.height, a.y + a.height) - Math.max(b.y, a.y)) >= b.height * 0.85);
   if (ok) return;
   const best = nearestArea(cx, b.y + b.height / 2);
@@ -476,7 +504,7 @@ function ensureVisible() {
   const y = Math.round(Math.min(Math.max(b.y, best.y), best.y + best.height - b.height));
   log(`창이 화면 밖(${b.x},${b.y} ${b.width}x${b.height}) → 보이는 곳(${x},${y})으로`);
   setPetBounds(x, y, { w: b.width, h: b.height });
-  S.x = pos.x; S.y = pos.y; saveSettings();
+  keepPos(); saveSettings();
 }
 
 // ---------------------------------------------------------------- 춤 노래
@@ -873,6 +901,7 @@ function signalHandlers() {
       if (!fetching) setTimeout(autoFirstPack, 100);
       return { ok: true, started: true, source: PACK_SOURCE };
     },
+    size: pct => applySizePct(pct),
     skin: (id, temp) => {
       const list = PACKS.map(p => p.id);
       if (!list.includes(id)) {
@@ -935,7 +964,7 @@ if (!app.requestSingleInstanceLock()) {
       tray.setToolTip('김비서 펫 — 오른쪽 클릭: 메뉴');
       tray.on('click', () => openMenu(null, false));
       updateTray();
-      screen.on('display-removed', () => { const sz = petSize(); if (!visibleEnough(pos.x, pos.y, sz)) { const p = defaultPos(sz); setPetBounds(p.x, p.y, sz); } });
+      for (const ev of ['display-added', 'display-removed', 'display-metrics-changed']) screen.on(ev, () => { clearTimeout(dispTimer); dispTimer = setTimeout(() => onDisplaysChanged(ev), 400); });
     }
     cursorTimer = setInterval(cursorTick, 40);
     setTimeout(ensureVisible, 1500); setInterval(ensureVisible, 3000);
@@ -959,7 +988,7 @@ if (!app.requestSingleInstanceLock()) {
   });
   app.on('before-quit', () => {
     quitting = true; clearInterval(cursorTimer); tts.stop(); voice.stop();
-    S.x = pos.x; S.y = pos.y;
+    if (!displaced) keepPos();          // 모니터를 빼서 임시로 옮겨 둔 자리는 기억에 덮어쓰지 않음
     try { fs.writeFileSync(SETTINGS, JSON.stringify(S, null, 1), 'utf8'); } catch (e) { /* 무시 */ }
   });
   app.on('window-all-closed', () => app.quit());

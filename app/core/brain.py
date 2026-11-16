@@ -625,6 +625,11 @@ def make_llm(state, cfg, tool_names=(), guards=None, session_key=""):
         key = keystore.get(b.get("열쇠_이름") or "openai", cfg)
         if not model or not key:
             raise RuntimeError("GPT 를 쓰려면 설정에 모델 이름과 열쇠가 있어야 해요.")
+    elif kind == "compat":   # OpenAI 호환 API(바깥 서비스·내 열쇠): 표준 값만 보냄 — llama.cpp 전용 값(캐시·생각 끄기·슬롯)도 OpenAI 전용 값도 안 붙임
+        base, model = str(b.get("호환_주소") or "").strip(), str(b.get("호환_모델") or "").strip()
+        key = keystore.get("compat", cfg) or "none"
+        if not base or not model:
+            raise RuntimeError("OpenAI 호환 API 를 쓰려면 설정에 주소와 모델 이름이 있어야 해요.")
     else:
         base = b.get("주소") or f"http://127.0.0.1:{cfg['포트']['두뇌']}/v1"
         model = b.get("모델") or "local"
@@ -718,6 +723,10 @@ async def simple_text(cfg, messages, max_tokens=300, temperature=0.3, timeout=60
     if kind == "openai":
         base, model = b.get("openai_주소") or "https://api.openai.com/v1", b.get("openai_모델") or ""
         key = keystore.get(b.get("열쇠_이름") or "openai", cfg)
+    elif kind == "compat":
+        base, model, key = str(b.get("호환_주소") or "").strip(), str(b.get("호환_모델") or "").strip(), keystore.get("compat", cfg) or "none"
+        if not base or not model:
+            return ""
     else:
         base, model = b.get("주소") or f"http://127.0.0.1:{cfg['포트']['두뇌']}/v1", b.get("모델") or "local"
         key = keystore.get(b.get("열쇠_이름"), cfg) if b.get("열쇠_이름") else "none"

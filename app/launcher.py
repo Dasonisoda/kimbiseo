@@ -524,10 +524,14 @@ main{margin:auto}
 main{width:min(420px,88vw)}h1{font-size:22px;font-weight:600;margin:0 0 4px}ul{list-style:none;padding:0;margin:16px 0;font-size:15px}li{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #262932;color:#ececf1}
 li span+span{font-size:14px;color:#8b8f9a}.켜짐,.이미{color:#56d364!important}.실패{color:#ff8a8a!important}.why{font-size:14px;color:#ff8a8a;margin:4px 0 0}.note{font-size:15px;color:#8b8f9a}
 button{font:inherit;padding:10px 22px;border-radius:8px;border:1px solid #262932;background:transparent;color:#ececf1;cursor:pointer}button:hover{border-color:#3a3e4a}</style>
-<div class="bar pywebview-drag-region"><button type="button" title="작업 표시줄로 내리기" onclick="window.pywebview.api.minimize()"><svg viewBox="0 0 20 20"><path d="M4 10h12" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>
+<div class="bar win-drag"><button type="button" title="작업 표시줄로 내리기" onclick="window.pywebview.api.minimize()"><svg viewBox="0 0 20 20"><path d="M4 10h12" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>
 <button type="button" title="끄기" onclick="window.pywebview.api.close()"><svg viewBox="0 0 20 20"><path d="M5 5l10 10M15 5L5 15" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button></div>
-<main class="pywebview-drag-region"><h1>김비서를 켜는 중이에요</h1><p class="note">처음 켤 때는 1~2분 걸릴 수 있어요.</p><ul id="l"></ul><div id="e"></div></main>
+<main class="win-drag"><h1>김비서를 켜는 중이에요</h1><p class="note">처음 켤 때는 1~2분 걸릴 수 있어요.</p><ul id="l"></ul><div id="e"></div></main>
 <script>
+// 창 옮기기: 누르면 시작·놓으면 끝만 알림(계산은 창 프로그램이 진짜 픽셀로 — app/winbox.py)
+document.addEventListener('pointerdown',e=>{if(e.button!==0||e.target.closest('button')||!e.target.closest('.win-drag'))return;
+const a=window.pywebview&&window.pywebview.api;if(!a||!a.drag_start)return;a.drag_start();
+const up=()=>{window.removeEventListener('pointerup',up);if(a.drag_end)a.drag_end();};window.addEventListener('pointerup',up);});
 function show(s){const l=document.getElementById('l');l.innerHTML='';for(const [k,v] of Object.entries(s['상태'])){const li=document.createElement('li');
 li.innerHTML='<span></span><span></span>';li.children[0].textContent=k;li.children[1].textContent=v;li.children[1].className=v.split(' ')[0];l.appendChild(li);
 const w=(s['이유']||{})[k];if(w&&v==='실패'){const p=document.createElement('p');p.className='why';p.textContent=w;l.appendChild(p);}}
@@ -537,8 +541,8 @@ if(s['실패']){const b=document.createElement('button');b.textContent='다시 �
 
 
 class Api(WinApi):
-    def __init__(self, la, win=None):
-        super().__init__(win)
+    def __init__(self, la, win=None, box=None):
+        super().__init__(win, box)
         self._la = la
 
     def close(self):
@@ -623,8 +627,11 @@ def message_box(text, title="김비서"):
 
 
 def run_window(la):
+    from app import winbox
+    dpi_mode = winbox.set_dpi_awareness((la.cfg.get("화면") or {}).get("배율_방식", "모니터별"))     # 창 틀을 불러오기 전에
+    log("창 배율 방식:", dpi_mode)
     import webview
-    from app.shell import WINDOW_MIN, patch_permissions, window_size
+    from app.shell import WINDOW_MIN, attach_box, make_box, patch_permissions, window_size
     origin = f"http://127.0.0.1:{la.port('body')}"
     win = {"w": None}
 
@@ -658,8 +665,10 @@ def run_window(la):
     la.on_change = push
     patch_permissions(origin)
     w, hh = window_size()
-    win["w"] = webview.create_window("김비서", html=SPLASH, js_api=Api(la, win), width=w, height=hh, min_size=WINDOW_MIN,
+    box = make_box(la.cfg, log)
+    win["w"] = webview.create_window("김비서", html=SPLASH, js_api=Api(la, win, box), width=w, height=hh, min_size=WINDOW_MIN,
                                      frameless=True, easy_drag=False, background_color="#0B0C0F", text_select=True)
+    attach_box(win["w"], box)
     win["w"].events.loaded += lambda: push()
     try:
         webview.start(boot, private_mode=False, storage_path=os.path.join(C.path(la.cfg, "캐시"), "창"))

@@ -8,7 +8,40 @@
   document.getElementById("mem-close").onclick = () => show("main");
   // 테두리 없는 김비서 창일 때만 위 줄의 내리기·끄기 단추를 보인다
   const winApi = () => (window.pywebview && window.pywebview.api) || null;
-  const appMode = () => { const a = winApi(); if (a && typeof a.minimize === "function" && typeof a.close === "function") document.body.classList.add("app"); };
+  const appMode = () => {
+    const a = winApi();
+    if (a && typeof a.minimize === "function" && typeof a.close === "function") document.body.classList.add("app");
+    if (a && typeof a.resize_start === "function") winGrips(a);
+  };
+  // 창 옮기기: 위쪽 줄(.win-drag)을 누르면 시작, 놓으면 끝만 알린다. 계산은 창 프로그램이 커서·창의 진짜 픽셀 좌표로 한다(app/winbox.py)
+  //   — 모니터마다 배율이 달라도 창이 커서에서 떨어지지 않는다. 단추·입력 칸 위에서는 옮기지 않는다.
+  document.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0 || !e.target.closest(".win-drag") || e.target.closest("button, input, select, textarea, a, .no-drag")) return;
+    const a = winApi();
+    if (!a || typeof a.drag_start !== "function") return;
+    a.drag_start();
+    const up = () => { window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", up); if (a.drag_end) a.drag_end(); };
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
+  });
+  // 창 크기 조절: 가장자리 여덟 곳(위·아래·왼쪽·오른쪽·네 귀퉁이)에 보이지 않는 손잡이를 둔다
+  function winGrips(a) {
+    if (document.getElementById("rz-se")) return;
+    document.body.classList.add("sizable");
+    for (const edge of ["n", "s", "e", "w", "ne", "nw", "se", "sw"]) {
+      const d = h("div", {class: "rz rz-" + edge, id: "rz-" + edge, "aria-hidden": "true"});
+      const end = () => { if (a.resize_end) a.resize_end(); };
+      d.addEventListener("pointerdown", (e) => {
+        if (e.button !== 0) return;
+        e.preventDefault();
+        try { d.setPointerCapture(e.pointerId); } catch (_) { /* 잡지 못해도 창 프로그램이 단추 뗌을 스스로 앎 */ }
+        a.resize_start(edge);
+      });
+      d.addEventListener("pointerup", end);
+      d.addEventListener("pointercancel", end);
+      document.body.appendChild(d);
+    }
+  }
   appMode();
   window.addEventListener("pywebviewready", appMode);
   document.getElementById("win-min").onclick = () => { const a = winApi(); if (a && a.minimize) a.minimize(); };

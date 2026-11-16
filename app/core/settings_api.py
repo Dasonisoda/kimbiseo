@@ -18,7 +18,7 @@ from . import voice_choice as V
 from .wake import name_warning
 
 CHOICES_FILE = os.path.join(C.APP, "config", "choices.json")
-SECRET_NAMES = ("url", "openai", "claude")
+SECRET_NAMES = ("url", "openai", "claude", "compat")
 CLI_KINDS = ("claude_cli", "codex_cli")
 
 
@@ -31,18 +31,48 @@ def _enum(*vals):
     return {"t": "enum", "v": vals}
 
 
+def _range(lo, hi, whole=False):
+    return {"t": "range", "min": lo, "max": hi, "int": whole}
+
+
+# 목소리 세부 설정(온도·쉼·빠르기 …)의 범위·기본값 — 화면 고르기 목록(choices.json '목소리_세부')과 같은 표를 쓴다.
+#   목소리 서버(voice/config.py GEN_LIMITS)도 같은 범위로 한 번 더 막는다(tests/unit/test_settings.py 가 두 표가 같은지 봄).
+VOICE_DETAIL_WHEN = {"top_k": "다시켜기:목소리"}       # CUDA 그래프에 굳는 값이라 서버를 다시 켜야 함. 나머지는 바로.
+
+
+def voice_detail():
+    """[{key, 이름, min, max, step, 기본, 단위, 엔진, 설명, 정수?}] — choices.json 에서."""
+    try:
+        rows = choices().get("목소리_세부") or []
+    except (OSError, ValueError):
+        rows = []
+    return [r for r in rows if isinstance(r, dict) and r.get("key")]
+
+
+def _voice_fields():
+    out = {}
+    for r in voice_detail():
+        k = "목소리." + str(r["key"])
+        out[k] = (_range(float(r["min"]), float(r["max"]), bool(r.get("정수"))), VOICE_DETAIL_WHEN.get(r["key"], "즉시"), str(r.get("이름") or r["key"]))
+    return out
+
+
 # 경로 → (검사, 반영 시점, 화면 이름)
 FIELDS = {
     "비서.이름": ({"t": "name"}, "즉시", "비서 이름"),
     "비서.별칭": ({"t": "list", "n": 20, "len": 20}, "즉시", "비슷한 이름(별칭)"),
-    "비서.말투": (_enum("존댓말", "편한 존댓말"), "즉시", "말투"),
+    "비서.말투": (_enum("auto", "존댓말", "편한 존댓말", "반말"), "즉시", "말투"),
+    "비서.성격": ({"t": "persona"}, "즉시", "성격 설명"),
+    "비서.답길이": (_enum("짧게", "보통", "자세히"), "즉시", "답 길이"),
     "사용자.호칭": ({"t": "str", "len": 10, "empty": True}, "즉시", "나를 부르는 말"),
     "사용자.기본장소": ({"t": "str", "len": 30, "empty": True}, "즉시", "사는 곳(날씨)"),
     "펫.성별": (_enum("여", "남"), "펫", "펫 성별"),
     "펫.옷": ({"t": "pet"}, "펫", "펫 캐릭터"),
     "펫.옷_받기": ({"t": "bool"}, "펫", "기본 옷 받기(동의)"),
     "펫.옷목록_주소": ({"t": "url", "empty": True}, "펫", "옷 목록 주소"),
-    "두뇌.방식": (_enum("claude_cli", "codex_cli", "local", "url", "openai", "claude"), "다음대화", "두뇌"),
+    "두뇌.방식": (_enum("claude_cli", "codex_cli", "local", "url", "compat", "openai", "claude"), "다음대화", "두뇌"),
+    "두뇌.호환_주소": ({"t": "url", "empty": True}, "다음대화", "OpenAI 호환 API 주소"),
+    "두뇌.호환_모델": ({"t": "str", "len": 120, "empty": True}, "다음대화", "OpenAI 호환 API 모델 이름"),
     "두뇌.구독_클로드_모델": (_enum("haiku", "sonnet", "opus"), "다음대화", "구독 클로드 모델"),
     "두뇌.구독_GPT_모델": ({"t": "str", "len": 60, "empty": True}, "다음대화", "구독 GPT 모델"),
     "두뇌.구독_GPT_생각": (_enum("", "none", "minimal", "low", "medium", "high"), "다음대화", "구독 GPT 생각 정도"),
@@ -55,7 +85,7 @@ FIELDS = {
     "목소리.엔진": (_enum("qwen", "windows"), "다시켜기:목소리", "목소리 종류"),
     "목소리.목소리": ({"t": "voice"}, "즉시", "목소리 견본"),
     "목소리.장치": (_enum("auto", "cuda", "cpu"), "다시켜기:목소리", "목소리 장치"),
-    "목소리.말속도": ({"t": "num", "v": (1.0, 1.2, 1.4)}, "즉시", "말 빠르기"),
+    "목소리.말속도": (_range(0.7, 1.6), "즉시", "말 빠르기"),       # choices.json '목소리_세부'가 있으면 아래에서 그 범위로 덮음
     "귀.장치": (_enum("auto", "cuda", "cpu"), "다시켜기:귀", "받아쓰기 장치"),
     "대화.끼어들기_감도": ({"t": "num", "v": (0.3, 0.4, 0.5)}, "즉시", "끼어들기 감도"),
     "대화.이름부르기": ({"t": "bool"}, "즉시", "이름을 불러야 대답"),
@@ -70,6 +100,8 @@ FIELDS = {
     "기억.일기": ({"t": "bool"}, "다음대화", "대화 일기"),
     "처음설정.끝": ({"t": "bool"}, "즉시", "처음 설정 끝"),
 }
+FIELDS.update(_voice_fields())      # 목소리.온도·세부_온도·반복_벌점·top_k·문장_쉼_초·말속도
+VOICE_GEN_KEYS = tuple(k for k in FIELDS if k.startswith("목소리.") and k.split(".", 1)[1] in ("온도", "세부_온도", "반복_벌점", "top_k", "문장_쉼_초"))
 RESTART_NAME = {"목소리": "목소리 서버", "귀": "받아쓰기(귀) 서버"}
 _CTRL = re.compile(r"[\x00-\x1f\x7f]")
 
@@ -177,6 +209,32 @@ def _check(key, rule, v, ch):
         if hit is None:
             raise ValueError("고를 수 있는 값: " + ", ".join(map(str, rule["v"])))
         return hit
+    if t == "range":
+        if isinstance(v, bool) or isinstance(v, (list, dict)):
+            raise ValueError("숫자로 넣어 주세요.")
+        try:
+            x = float(v)
+        except (TypeError, ValueError):
+            raise ValueError("숫자로 넣어 주세요.") from None
+        if x != x or x in (float("inf"), float("-inf")):
+            raise ValueError("숫자로 넣어 주세요.")
+        lo, hi = rule["min"], rule["max"]
+        if x < lo - 1e-9 or x > hi + 1e-9:       # 범위를 벗어난 값은 고쳐 넣지 않고 막는다
+            raise ValueError(f"{lo:g}부터 {hi:g}까지만 돼요.")
+        x = min(hi, max(lo, x))
+        if rule.get("int"):
+            if abs(x - round(x)) > 1e-9:
+                raise ValueError("소수점 없는 숫자로 넣어 주세요.")
+            return int(round(x))
+        return round(x, 3)
+    if t == "persona":
+        from .prompt import PERSONA_MAX
+        if not isinstance(v, str):
+            raise ValueError("글자로 넣어 주세요.")
+        s = re.sub(r"\s+", " ", _CTRL.sub(" ", v)).strip()
+        if len(s) > PERSONA_MAX:
+            raise ValueError(f"{PERSONA_MAX}글자까지 돼요.")
+        return s
     if t == "bool":
         if not isinstance(v, bool):
             raise ValueError("켜기/끄기(true/false)로 넣어 주세요.")
@@ -185,6 +243,8 @@ def _check(key, rule, v, ch):
         s = _clean_str(v, 300, rule.get("empty", False))
         if s and not re.match(r"^https?://[^\s/]+(/[^\s]*)?$", s):
             raise ValueError("http:// 또는 https:// 로 시작하는 주소를 넣어 주세요.")
+        if s and "@" in s.split("//", 1)[1].split("/", 1)[0]:
+            raise ValueError("주소에 계정·비밀번호(…@)를 넣지 말아 주세요. 열쇠는 '열쇠' 칸에 넣어요.")      # 주소는 설정 파일·기록에 남으므로
         return s.rstrip("/")
     if t == "pet":
         ids = [p["id"] for p in ch.get("펫", [])]
@@ -228,6 +288,11 @@ def validate(changes, cfg, voice_warn=""):
     if "비서.별칭" in clean:
         name = clean.get("비서.이름") or C.names(cfg)[0]
         clean["비서.별칭"] = [a for a in clean["비서.별칭"] if a != name]
+    if clean.get("비서.성격"):
+        from .prompt import persona_parts
+        _kept, dropped = persona_parts(clean["비서.성격"])
+        if dropped:      # 규칙을 바꾸려는 문장은 저장은 하되 두뇌에는 전달하지 않는다 — 무엇이 빠지는지 알려 줌
+            warns.append("성격 설명에는 말투·분위기만 적어 주세요. 이 문장은 두뇌에 전달하지 않아요: " + " / ".join(d[:40] for d in dropped[:3]))
     if clean.get("목소리.엔진") == "qwen" and voice_warn:
         warns.append(voice_warn)
     w = voice_warning(cfg, clean)
@@ -245,6 +310,10 @@ def validate(changes, cfg, voice_warn=""):
         addr = clean["두뇌.주소"] if "두뇌.주소" in clean else (get(cfg, "두뇌.주소") if get(cfg, "두뇌.방식") == "url" else "")
         if kind == "url" and not addr and "두뇌.주소" not in errors:
             errors["두뇌.주소"] = "내 AI 주소를 넣어 주세요(예: http://127.0.0.1:1234/v1)."
+        if kind == "compat":
+            for k, msg in (("두뇌.호환_주소", "OpenAI 호환 API 주소를 넣어 주세요(예: https://…/v1)."), ("두뇌.호환_모델", "모델 이름을 넣어 주세요.")):
+                if not (clean[k] if k in clean else get(cfg, k)) and k not in errors:
+                    errors[k] = msg
     return clean, errors, warns
 
 
@@ -271,6 +340,15 @@ def changed_keys(cfg, clean):
             auto_now = bool(cfg["_voice_choice"].get("자동"))
             if (v == V.AUTO and not auto_now) or (v != V.AUTO and (auto_now or get(cfg, k) != v)):
                 out.append(k)
+        elif k == "비서.말투" and isinstance(cfg.get("_tone_choice"), dict):
+            # 말투도 같다 — cfg 에는 펫 성별로 정한 실제 말투가 들어 있다. '자동 → 자동'만 안 바뀐 것이고,
+            #   자동일 때 같은 말투를 직접 고르면 그때부터 고정(펫 성별을 바꿔도 그대로).
+            auto_now = bool(cfg["_tone_choice"].get("자동"))
+            if (v == V.AUTO and not auto_now) or (v != V.AUTO and (auto_now or get(cfg, k) != v)):
+                out.append(k)
+        elif isinstance(v, float) and isinstance(get(cfg, k), (int, float)) and not isinstance(get(cfg, k), bool):
+            if abs(float(get(cfg, k)) - v) > 1e-9:
+                out.append(k)
         elif get(cfg, k) != v:
             out.append(k)
     return out
@@ -289,6 +367,13 @@ def view(cfg):
     v.setdefault("목소리", {})["해석"] = d
     if d.get("자동"):
         v["목소리"]["목소리"] = V.AUTO
+    # 말투도 같다: 자동이면 화면의 고른 값은 "auto", 실제 말투는 말투_해석["말투"]
+    t = V.describe_tone(cfg)
+    v.setdefault("비서", {})["말투_해석"] = t
+    if t.get("자동"):
+        v["비서"]["말투"] = V.AUTO
+    from .prompt import persona_parts
+    v["비서"]["성격_빠짐"] = persona_parts(get(cfg, "비서.성격", ""))[1]
     return v
 
 
@@ -386,6 +471,11 @@ async def brain_test(cfg, over=None, timeout=25.0):
             if not key:
                 res["오류"] = "GPT 열쇠를 먼저 넣어 주세요."
                 return res
+        elif kind == "compat":
+            base, model, key = str(b.get("호환_주소") or "").strip(), str(b.get("호환_모델") or "").strip(), keystore.get("compat", cfg)
+            if not base or not model:
+                res["오류"] = "주소와 모델 이름을 넣어 주세요."
+                return res
         else:
             base = b.get("주소") or f"http://127.0.0.1:{cfg['포트']['두뇌']}/v1"
             model = b.get("모델") or "local"
@@ -440,3 +530,34 @@ async def brain_test(cfg, over=None, timeout=25.0):
     except (httpx.HTTPError, ValueError) as ex:
         res["오류"] = f"연결 오류({ex.__class__.__name__})"
     return res
+
+
+async def brain_models(cfg, over=None, timeout=15.0):
+    """'모델 목록 불러오기' — OpenAI 호환 주소의 GET /models. 저장 전 값(over)으로. 열쇠 값은 결과·기록에 안 남김. → {"ok", "모델": [...]}"""
+    b = C.deep_merge(cfg["두뇌"], over or {})
+    kind = str(b.get("방식") or "")
+    if kind == "compat":
+        base, key = str(b.get("호환_주소") or "").strip(), keystore.get("compat", cfg)
+    elif kind == "url":
+        base, key = str(b.get("주소") or "").strip(), keystore.get("url", cfg)
+    else:
+        return {"ok": False, "오류": "이 방식은 모델 목록을 불러오지 않아요."}
+    if not base:
+        return {"ok": False, "오류": "주소를 먼저 넣어 주세요."}
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(timeout, connect=5.0)) as cl:
+            r = await cl.get(base.rstrip("/") + "/models", headers={"Authorization": f"Bearer {key or 'none'}"})
+        if r.status_code in (401, 403):
+            return {"ok": False, "오류": "열쇠가 맞지 않아요(거절됨)." if key else "열쇠가 필요해요. 열쇠를 넣고 '열쇠 저장'을 눌러 주세요."}
+        if r.status_code >= 400:
+            return {"ok": False, "오류": f"모델 목록을 주지 않는 주소예요({r.status_code}). 모델 이름을 직접 넣어 주세요."}
+        data = r.json()
+        items = data.get("data") if isinstance(data, dict) else data
+        ids = sorted({str(x.get("id") if isinstance(x, dict) else x)[:120] for x in (items or []) if (x.get("id") if isinstance(x, dict) else x)})
+        return {"ok": bool(ids), "모델": ids[:300], **({} if ids else {"오류": "모델 목록이 비어 있어요. 모델 이름을 직접 넣어 주세요."})}
+    except httpx.ConnectError:
+        return {"ok": False, "오류": "그 주소에 연결하지 못했어요."}
+    except httpx.TimeoutException:
+        return {"ok": False, "오류": "그 주소가 응답하지 않아요."}
+    except (httpx.HTTPError, ValueError):
+        return {"ok": False, "오류": "모델 목록을 읽지 못했어요. 모델 이름을 직접 넣어 주세요."}

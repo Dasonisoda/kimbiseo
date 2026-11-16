@@ -34,6 +34,21 @@ def norm_speed(v):
     return None
 
 
+SPEED_MIN, SPEED_MAX = 0.5, 2.0     # 줄이기(atempo)가 받는 범위. 설정 화면은 0.7~1.6 만 고르게 함
+
+
+def clamp_speed(v, default=1.0):
+    """설정의 말 빠르기(0.7 · 1.25 처럼 아무 값) → 쓸 수 있는 범위 안의 수. 숫자가 아니면 default."""
+    try:
+        x = float(v)
+    except (TypeError, ValueError):
+        return default
+    if x != x:
+        return default
+    x = min(SPEED_MAX, max(SPEED_MIN, x))
+    return 1.0 if abs(x - 1.0) < 1e-3 else round(x, 3)
+
+
 class TimeStretch:
     """한 문장 동안 쓰는 흐름 처리기. feed(int16 bytes) → 줄인 int16 bytes, 끝에 flush()."""
 

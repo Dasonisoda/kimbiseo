@@ -10,7 +10,8 @@
 #     GET   /api/events       화면에 보낼 사건(상태·자막·설정 반영) — Server-Sent Events
 #     GET   /api/status       상태(두뇌·이름·캐시 가드·펫·대화 중·마이크 처리(메아리 지우기)·다시 켜야 할 것)
 #     GET   /api/settings     지금 설정(비밀값 없음) + 고르기 목록   POST /api/settings {"바꿀것": {...}} 저장 → 바로 반영
-#     POST  /api/secret       {"이름": "url"|"openai"|"claude", "값": "..."} 열쇠 저장(값은 돌려주지 않음)
+#     POST  /api/secret       {"이름": "url"|"openai"|"claude"|"compat", "값": "..."} 열쇠 저장(값은 돌려주지 않음)
+#     POST  /api/brain/models  {"두뇌": {...}} OpenAI 호환 주소의 모델 목록(저장 전 값으로)
 #     GET   /api/system       이 PC 사양 + 추천 구성     POST /api/brain/test  두뇌 연결 시험(저장 전 값으로)
 #     GET   /api/brain/options  두뇌 바꾸기 — 구독 두뇌(claude·codex) 설치·로그인 상태, 권하는 두뇌, Gemma 설치 상태
 #     POST  /api/brain/login  {"이름": "claude"|"codex"} 그 프로그램의 로그인 창을 엶(사용자가 직접 로그인 — 김비서는 계정을 안 봄)
@@ -132,6 +133,43 @@ def _tell_pet(keys):
         forget_outfit()      # 다음 문장이 바로 새 옷의 목소리를 고르게
     logger.info(f"펫에 알림: {out}")
     return out
+
+
+def _voice_gen_body():
+    """설정의 목소리 세부 값 → 목소리 서버 POST /config 본문(top_k 는 서버를 다시 켜야 읽으므로 안 보냄)."""
+    vc = CFG.get("목소리") or {}
+    out = {}
+    for api, key in (("temperature", "온도"), ("sub_temperature", "세부_온도"), ("repetition_penalty", "반복_벌점"), ("gap", "문장_쉼_초")):
+        v = vc.get(key)
+        if isinstance(v, (int, float)) and not isinstance(v, bool):
+            out[api] = float(v)
+    return out
+
+
+def _tell_voice():
+    """목소리 세부 설정(온도·쉼 …)이 바뀌면 켜져 있는 목소리 서버에 바로 알림. 꺼져 있으면 다음에 켤 때 설정 파일에서 읽음.
+    → {"코드": 200|400|None, "바뀜": {...}, "오류": "..."}"""
+    import http.client
+    body = json.dumps(_voice_gen_body()).encode("utf-8")
+    port = int(CFG["포트"]["목소리"])
+    try:
+        c = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+        c.request("POST", "/config", body=body, headers={"Content-Type": "application/json", "Host": f"127.0.0.1:{port}"})
+        r = c.getresponse()
+        raw = r.read()
+        c.close()
+        try:
+            j = json.loads(raw.decode("utf-8") or "{}")
+        except ValueError:
+            j = {}
+        out = {"코드": r.status, "바뀜": j.get("changed") or {}, "엔진": j.get("engine")}
+        if r.status != 200:
+            out["오류"] = str(j.get("error") or "")[:200]
+        logger.info(f"목소리 서버에 세부 설정 알림: {out}")
+        return out
+    except (OSError, http.client.HTTPException) as ex:
+        logger.info(f"목소리 서버가 꺼져 있어 세부 설정은 다음에 켤 때 반영({ex.__class__.__name__})")
+        return {"코드": None}
 
 
 def broadcast(ev):
@@ -507,6 +545,7 @@ def make_app():
         if PET is not None and {"비서.이름", "비서.별칭"} & set(keys):
             PET.names = [C.names(CFG)[0]] + C.names(CFG)[1]
         pet_said = await asyncio.to_thread(_tell_pet, keys) if {"펫.옷_받기", "펫.옷"} & set(keys) else {}
+        voice_said = await asyncio.to_thread(_tell_voice) if set(S.VOICE_GEN_KEYS) & set(keys) else {}
         if "두뇌.방식" in keys or "두뇌.구독_GPT_모델" in keys:
             from .core import cli_brain
             asyncio.ensure_future(cli_brain.shutdown_except(str(CFG["두뇌"].get("방식"))))
@@ -515,7 +554,32 @@ def make_app():
             logger.info(f"설정 바뀜: {', '.join(keys)} → 지금 대화 반영 {applied}")
             broadcast({"type": "settings", "keys": keys, "applied": applied})
         return {"ok": True, "바뀜": keys, "반영": groups, "지금_대화에_반영": applied, "경고": warns,
-                "다시켜기_필요": PENDING, "설정": S.view(CFG), "펫": pet_said}
+                "다시켜기_필요": PENDING, "설정": S.view(CFG), "펫": pet_said, "목소리서버": voice_said}
+
+    # ---------------------------------------------------------------- 펫 크기(펫이 제 설정에 기억 — 본체는 전해 주기만)
+    @app.get("/api/pet/size")
+    async def pet_size_get():
+        from .pet_link.face import pet_get
+        code, j = await asyncio.to_thread(pet_get, CFG, "/status")
+        if code != 200:
+            return {"ok": False, "켜짐": False, "오류": "펫이 꺼져 있어요. 펫이 켜져 있을 때 크기를 바꿀 수 있어요."}
+        return {"ok": True, "켜짐": True, "크기": j.get("size"), "퍼센트": j.get("sizePct"), "픽셀": j.get("sizePx"),
+                "범위": j.get("sizeRange") or [50, 200], "단계": j.get("sizes") or []}
+
+    @app.post("/api/pet/size")
+    async def pet_size_post(request: Request):
+        from .pet_link.face import pet_call
+        b = await request.json()
+        pct = (b or {}).get("퍼센트")
+        if isinstance(pct, bool) or not isinstance(pct, (int, float)) or not (50 <= float(pct) <= 200):
+            return JSONResponse({"ok": False, "오류": "펫 크기는 50%부터 200%까지만 돼요."}, status_code=400)
+        code, j = await asyncio.to_thread(pet_call, CFG, "/size", {"percent": int(round(float(pct)))})
+        if code is None:
+            return JSONResponse({"ok": False, "켜짐": False, "오류": "펫이 꺼져 있어요. 펫이 켜져 있을 때 크기를 바꿀 수 있어요."}, status_code=409)
+        if code != 200:
+            return JSONResponse({"ok": False, "오류": str(j.get("error") or "펫이 크기를 바꾸지 못했어요.")[:200]}, status_code=400)
+        logger.info(f"펫 크기 {j.get('sizePct')}%")
+        return {"ok": True, "퍼센트": j.get("sizePct"), "픽셀": j.get("sizePx"), "크기": j.get("size")}
 
     @app.post("/api/pending/clear")
     async def pending_clear(request: Request):
@@ -719,6 +783,22 @@ def make_app():
     @app.on_event("startup")
     async def _prewarm():
         asyncio.ensure_future(cli_brain.prewarm(CFG))
+
+    @app.post("/api/brain/models")
+    async def brain_models(request: Request):
+        b = await request.json()
+        over = (b or {}).get("두뇌") if isinstance(b, dict) else None
+        if not isinstance(over, dict):
+            over = None
+        if over:
+            clean, errors, _w = S.validate({"두뇌": {k: v for k, v in over.items() if k in ("방식", "주소", "호환_주소")}}, CFG)
+            errors = {k: v for k, v in errors.items() if k != "두뇌.호환_모델"}       # 목록을 받으려는 것이라 모델 이름은 아직 없어도 됨
+            if errors:
+                return JSONResponse({"ok": False, "오류": "; ".join(errors.values())}, status_code=400)
+            over = {k.split(".", 1)[1]: v for k, v in clean.items()}
+        r = await S.brain_models(CFG, over)
+        logger.info(f"두뇌 모델 목록: ok={r.get('ok')} {len(r.get('모델') or [])}개 {r.get('오류') or ''}")
+        return r
 
     @app.post("/api/brain/test")
     async def brain_test(request: Request):

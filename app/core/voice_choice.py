@@ -12,8 +12,8 @@
 #      "목소리 kimbiseo_m 참고음성 없음 → 기본 kimbiseo 사용" 같은 한 줄을 남긴다.
 #
 # 말투도 같은 규칙을 쓴다.
-#   - 사용자 설정(settings.json)에 '비서.말투' 가 있으면 그 값이 고정값이다(자동 선택 무시).
-#   - 없으면 펫.성별 로 고른다 — 여: 존댓말, 남: 편한 존댓말.
+#   - 사용자 설정(settings.json)에 '비서.말투' 가 있으면 그 값이 고정값이다(자동 선택 무시) — 존댓말 · 편한 존댓말 · 반말.
+#   - 없거나 "auto"(설정 화면의 '자동')면 펫.성별 로 고른다 — 여: 존댓말, 남: 편한 존댓말.
 #
 # 목소리 서버는 요청마다 "voice" 를 받으므로(tts_server.py 의 ensure_voice), 성별이 바뀌면
 # 설정 저장 때 Session.apply_settings 가 VoiceLink.voice 만 바꿔 주면 서버를 다시 켜지 않아도 된다.
@@ -58,11 +58,11 @@ def user_voice(user):
 
 
 def user_tone(user):
-    """사용자 설정 dict 에 '비서.말투' 가 명시돼 있으면 그 값, 없으면 None."""
+    """사용자 설정 dict 에 '비서.말투' 가 명시돼 있으면 그 값, 없으면(또는 "auto" — 설정 화면의 '자동' — 면) None."""
     if not isinstance(user, dict):
         return None
     v = (user.get("비서") or {}).get("말투")
-    return v if isinstance(v, str) and v.strip() else None
+    return v if isinstance(v, str) and v.strip() and v.strip() != AUTO else None
 
 
 def user_from_cfg(cfg):

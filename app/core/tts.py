@@ -24,12 +24,31 @@ from .voice_link import VoiceLink, speech_rate, text_norm
 SR = 24000
 
 
+NUM_DOT = chr(0xE000)                               # 숫자 바로 뒤 마침표 자리(문장 끝으로 보지 않게 잠깐 바꿔 둠 — 내보낼 때 '.' 로 되돌림)
+_NUM_TAIL = re.compile(r"(?:^|[\s(\[])\d{1,4}$")     # '2026' · '1' · '16' 처럼 숫자만으로 된 낱말의 끝
+
+
+def _undot(a):
+    """문장 모음 결과의 숫자 마침표 자리를 '.' 로 되돌림."""
+    if a is None or NUM_DOT not in a.text:
+        return a
+    return Aggregation(text=a.text.replace(NUM_DOT, "."), type=a.type)
+
+
 class FirstCommaAggregator(SimpleTextAggregator):
+    """문장 모으기 + 첫 쉼표에서 먼저 읽기.
+    숫자 바로 뒤 마침표('2026. 11. 16.' · '1. 사과 2. 배' · '0.1.12')는 문장 끝으로 보지 않는다 — 날짜·목록 번호·판 번호가
+    '이천이십육.' '십일.' 처럼 토막 나 따로 읽히던 것을 막음(읽기 변환이 통째로 받아야 '이천이십육 년 십일월 십육 일'로 읽음)."""
+
     def __init__(self, min_chars=1, long_chars=20, first_comma=True, **kw):
         super().__init__(**kw)
         self._first = True
         self._min = min_chars if first_comma else long_chars
         self._long = long_chars
+
+    @property
+    def text(self):
+        return _undot(super().text)
 
     async def aggregate(self, text):
         if self._aggregation_type == TextType.TOKEN:
@@ -40,18 +59,20 @@ class FirstCommaAggregator(SimpleTextAggregator):
         for ch in text:
             if ch in ",，" and not self._text[-1:].isdigit() and \
                     len(re.sub(r"[^가-힣A-Za-z0-9]", "", self._text)) >= (self._min if self._first else self._long):
-                out = (self._text + ch).strip(" ")
+                out = (self._text + ch).strip(" ").replace(NUM_DOT, ".")
                 self._text = ""
                 self._first = False
                 yield Aggregation(text=out, type=TextType.SENTENCE)
                 continue
+            if ch == "." and _NUM_TAIL.search(self._text):
+                ch = NUM_DOT
             async for a in super().aggregate(ch):
                 self._first = False
-                yield a
+                yield _undot(a)
 
     async def flush(self):
         self._first = True
-        return await super().flush()
+        return _undot(await super().flush())
 
     async def handle_interruption(self):
         self._first = True
@@ -109,6 +130,17 @@ class VoiceTTS(TTSService):
             logger.info(f"목소리: {name or '기본'} ({why}{' ' + outfit['id'] if why == '옷' and outfit else ''})")
         return name
 
+    def _gap_after(self, text):
+        """이 문장 뒤에 더 넣을 쉼(초). 설정 목소리.문장_쉼_초(0~1) — 문장이 끝나는 곳(. ! ? …)에만, 쉼표에서 끊은 조각 뒤에는 넣지 않음.
+        설정을 문장마다 다시 읽으므로 화면에서 바꾸면 다음 문장부터 바로 바뀐다."""
+        try:
+            g = float((self.state.cfg.get("목소리") or {}).get("문장_쉼_초", 0) or 0)
+        except (TypeError, ValueError):
+            return 0.0
+        if not g > 0 or not re.search(r"[.!?。…~]['\")\]]?\s*$", text):
+            return 0.0
+        return min(g, 1.0)
+
     @staticmethod
     def _hush(context_id):
         """읽지 않은 문장 자리의 아주 짧은 무음(10ms) — 소리 없이 끝난 문장이 다음 문장을 첫소리_기다림_초 만큼 붙잡지 않게."""
@@ -137,7 +169,8 @@ class VoiceTTS(TTSService):
             self._spoken_n += 1
         st.add_spoken(text)
         await self.start_tts_usage_metrics(text)
-        speed = speech_rate.norm_speed(st.speed) or 1.0
+        speed = speech_rate.clamp_speed(st.speed)       # 0.7~1.6(설정 화면) — 1.0/1.2/1.4 말고도 됨
+        gap = self._gap_after(text)
         stretch = None
         sm = self.smoother if self.smooth_on else None
         if sm is not None:
@@ -168,6 +201,8 @@ class VoiceTTS(TTSService):
                         tail = (sm.feed(tail) if tail else b"") + sm.end()
                     if tail:
                         yield TTSAudioRawFrame(audio=tail, sample_rate=SR, num_channels=1, context_id=context_id)
+                    if gap > 0 and not first and not msg.get("error"):     # 문장 사이 쉼(설정 목소리.문장_쉼_초) — 소리가 난 문장 뒤에만
+                        yield TTSAudioRawFrame(audio=bytes(2 * int(SR * gap)), sample_rate=SR, num_channels=1, context_id=context_id)
                     break
                 if stretch is not None:
                     pcm = stretch.feed(pcm)

@@ -4,6 +4,9 @@
 #   - --start-body: 본체가 안 켜져 있으면 창 없이 켜고(PID 기록), 창을 닫으면 자기가 켠 본체만 끈다.
 #   - 메아리 지우기(에코 제거)는 화면(audio.js)이 마이크를 열 때 켜고 getSettings() 로 확인해 화면·본체 기록에 남긴다.
 #   - --debug-port: 시험용(DevTools 로 붙어 화면을 확인). --hidden: 시험용(창을 숨김).
+#   - 창 옮기기·크기 조절·자리 기억(0.1.13~): app/winbox.py — 모니터마다 배율이 달라도 진짜 픽셀로 계산해 좌표가 틀어지지 않게.
+#     화면(start.js)은 위쪽 줄을 누르면 drag_start, 가장자리를 누르면 resize_start(방향)만 부르고, 놓으면 drag_end·resize_end.
+#     크기·자리는 자료 폴더 window.json 에 기억(설정 화면.창_기억 false 면 기억 안 함).
 import argparse
 import json
 import os
@@ -16,11 +19,12 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
+from app import winbox  # noqa: E402
 from app.core import config as C  # noqa: E402
 
 TITLE = "김비서"
-WINDOW_SIZE = (400, 680)   # 테두리 없는 작은 검은 창(내리기·끄기 단추는 화면 위 줄). 테두리 없는 창은 크기를 못 바꿈
-WINDOW_MIN = (340, 480)
+WINDOW_SIZE = (400, 680)   # 처음 크기 — 테두리 없는 작은 검은 창(내리기·끄기 단추는 화면 위 줄). 가장자리를 끌면 크기가 바뀜(winbox)
+WINDOW_MIN = (340, 480)    # 이보다 작게는 안 줄어듦
 LOG = None
 
 
@@ -45,10 +49,11 @@ def window_size():
 
 
 class WinApi:
-    """화면 위 줄의 내리기·끄기 단추용(테두리 없는 창이라 윈도우 제목줄 단추가 없음)."""
+    """화면 위 줄의 내리기·끄기 단추 + 창 옮기기·크기 조절(테두리 없는 창이라 윈도우 제목줄·테두리가 없음)."""
 
-    def __init__(self, win=None):
+    def __init__(self, win=None, box=None):
         self._win = win if win is not None else {}
+        self._box = box          # winbox.WinBox(없으면 옮기기·크기 조절 단추가 화면에 안 생김)
 
     def minimize(self):
         if self._win.get("w") is not None:
@@ -56,9 +61,86 @@ class WinApi:
         return True
 
     def close(self):
+        if self._box is not None:
+            self._box.save()
         if self._win.get("w") is not None:
             self._win["w"].destroy()
         return True
+
+    # ---- 창 옮기기·크기 조절: 화면은 시작·끝만 알리고, 계산은 winbox 가 커서·창의 진짜 픽셀 좌표로 한다
+    def drag_start(self):
+        return bool(self._box and self._box.start("drag"))
+
+    def drag_end(self):
+        return bool(self._box and self._box.stop())
+
+    def resize_start(self, edge):
+        return bool(self._box and self._box.start("resize", str(edge or "")))
+
+    def resize_end(self):
+        return bool(self._box and self._box.stop())
+
+    def win_info(self):
+        """창 자리·크기·배율(시험·문제 해결용)."""
+        return self._box.info() if self._box else None
+
+    def win_test_cursor(self, x=None, y=None, down=True):
+        """시험 전용(환경변수 KIMBISEO_TEST_WINDOW=1 일 때만): 진짜 마우스 대신 이 좌표를 커서로 쓴다. x 없이 부르면 진짜 마우스로."""
+        if self._box is None or os.environ.get("KIMBISEO_TEST_WINDOW") != "1":
+            return False
+        return self._box.set_fake(x, y, down)
+
+    def win_test_move(self, x, y):
+        """시험 전용(KIMBISEO_TEST_WINDOW=1 일 때만): 윈도우가 창을 옮겨 놓은 것처럼(우리 끌기 말고) 창을 그 좌표로 옮긴다."""
+        b = self._box
+        if b is None or b.hwnd is None or os.environ.get("KIMBISEO_TEST_WINDOW") != "1":
+            return False
+        r = b.env.rect(b.hwnd)
+        return bool(r and b.env.set_rect(b.hwnd, (int(x), int(y), int(x) + r[2] - r[0], int(y) + r[3] - r[1])))
+
+
+def make_box(cfg, logf=None):
+    """설정에서 창 기억 여부를 읽어 winbox.WinBox 를 만든다(윈도우가 아니면 None)."""
+    if os.name != "nt":
+        return None
+    sc = cfg.get("화면") or {}
+    return winbox.WinBox(os.path.join(C.path(cfg, "자료"), "window.json"), WINDOW_SIZE, WINDOW_MIN,
+                         remember=sc.get("창_기억", True) is not False, env=winbox.Win32Env(), log=logf or log)
+
+
+def attach_box(window, box):
+    """창이 만들어진 뒤(보이기 전) 기억한 자리·크기로 놓고, 닫을 때·다른 까닭으로 옮겨졌을 때 맞춘다."""
+    if box is None:
+        return
+    import threading
+    timer = {"t": None}
+
+    def before_show():
+        try:
+            from System.Drawing import Size
+            window.native.MinimumSize = Size(1, 1)      # 최소 크기는 winbox 가 모니터 배율에 맞춰 지킴(창 틀의 값은 만든 모니터 배율로 굳어 있음)
+            box.bind(int(window.native.Handle.ToInt64()))
+        except Exception as ex:  # noqa: BLE001
+            log("창 자리 놓기 실패", repr(ex))
+
+    def later(*_a):
+        if timer["t"] is not None:
+            timer["t"].cancel()
+        timer["t"] = threading.Timer(0.6, lambda: _quiet(box.settle))      # Win+Shift+화살표·모니터 빼기·배율 바꾸기 뒤
+        timer["t"].daemon = True
+        timer["t"].start()
+
+    def _quiet(fn):
+        try:
+            fn()
+        except Exception as ex:  # noqa: BLE001
+            log("창 맞춤 실패", repr(ex))
+
+    window.events.before_show += before_show
+    window.events.moved += later
+    window.events.resized += later
+    window.events.restored += later
+    window.events.closing += lambda: _quiet(box.save)
 
 
 def log(*a):
@@ -124,7 +206,8 @@ def main():
     origin = f"http://127.0.0.1:{port}"
     LOG = os.path.join(C.path(cfg, "로그"), "창.log")
     os.makedirs(os.path.dirname(LOG), exist_ok=True)
-    log("==== 창 시작", origin)
+    dpi_mode = winbox.set_dpi_awareness((cfg.get("화면") or {}).get("배율_방식", "모니터별"))    # 창을 만들기 전에(창 틀을 불러오기 전에)
+    log("==== 창 시작", origin, "· 배율 방식", dpi_mode)
 
     mine = None
     if not body_up(origin):
@@ -143,9 +226,11 @@ def main():
         webview.settings["REMOTE_DEBUGGING_PORT"] = a.debug_port
     win = {"w": None}
     ww, wh = window_size()
-    win["w"] = webview.create_window(TITLE, origin + "/", js_api=WinApi(win), width=ww, height=wh,
+    box = make_box(cfg)
+    win["w"] = webview.create_window(TITLE, origin + "/", js_api=WinApi(win, box), width=ww, height=wh,
                                      min_size=WINDOW_MIN, frameless=True, easy_drag=False, hidden=a.hidden,
                                      background_color="#0B0C0F", text_select=True)
+    attach_box(win["w"], box)
     try:
         webview.start(private_mode=False, storage_path=os.path.join(C.path(cfg, "캐시"), "창"))
     finally:

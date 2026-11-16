@@ -4,7 +4,11 @@
 #   POST /tts_lip     같은 입력 → JSON {"wav_base64", "lip": {dur, fps, lead, frames:[[t, 입모양, 벌림]...]}, "read", "emotion"}
 #                     (입모양 = 소리만으로 추정한 펫 립싱크 자료 — lipsync.py)
 #   POST /read        {"text": "..."} → {"read": 글 정리 결과, "sentences": [...]}
-#   GET  /status      → 엔진(qwen|windows)·장치·감정·캐시·바쁨·idle_sec(마지막 요청 뒤 지난 초)·그래픽 메모리
+#   GET  /status      → 엔진(qwen|windows)·장치·감정·캐시·바쁨·idle_sec(마지막 요청 뒤 지난 초)·그래픽 메모리·gen(세부 설정)
+#   GET  /config      → 목소리 세부 설정(온도·세부 온도·반복 벌점·top-k·문장 사이 쉼) 지금 값·기본값·받는 범위
+#   POST /config      {"temperature": 0.3~1.0, "sub_temperature": 0.5~1.1, "repetition_penalty": 1.0~1.3, "gap": 0~1.0} 중 바꿀 것만,
+#                     또는 {"reset": true}(기본값으로) → 다음 문장부터 반영. 범위를 벗어나면 400(아무것도 안 바뀜).
+#                     top_k 는 서버를 켤 때만 읽는다(여기로 보내면 "restart": ["top_k"] 로 알려 줌). 윈도우 음성은 gap 만 쓴다.
 #
 #   본체용 스트림: /tts_stream 에 "raw": true 면 글 정리 없이(본체가 이미 숫자·모델명 읽기를 함 — 두 번 바꾸지 않게, 하품만 뺌)
 #         캐시 없이 바로 만들고, 앞 무음을 잘라 내고(첫 소리 빠르게), "session"·"pace"(초)·"speed" 로 재생 시계를 맞춰
@@ -46,7 +50,7 @@ from text_norm import drop_yawn, has_yawn, normalize, split_sentences  # noqa: E
 
 VERSION = "0.1.0"
 SR = 24000
-GAP = 0.12            # 문장 사이 쉼(초)
+GAP = 0.12            # 문장 사이 쉼(초) — 여기에 설정 '목소리.문장_쉼_초'(STATE["gen"])를 더함
 MAX_TEXT = 500
 MAX_BODY = 16 * 1024
 VOICES_FILE = os.path.join(HERE, "voices.json")
@@ -58,7 +62,7 @@ QWEN_GPU_FREE_MIN_MIB = 3300
 STATE = dict(judge=None, engine=None, engine_name=None, device=None, dtype=None, busy=False, waiting=0, started=time.time(),
              served=0, cache_hits=0, error=None, fallback_reason=None, last_use=time.time(), voices={}, default_voice="",
              voice_load={}, voice_fallback=None, cache_dir=None, log=print, show_text=False, cfg=None, wanted=None,
-             switched_at=None, switch_after=None)
+             switched_at=None, switch_after=None, gen=None)
 GEN_LOCK = threading.Lock()
 WAIT_LOCK = threading.Lock()
 _SWITCHED = object()
@@ -71,6 +75,65 @@ ONSET_DB, LEAD_DB, LEAD_MAX, PRE_ROLL, MAX_TRIM_SEC = -46.0, -55.0, 0.3, 0.06, 2
 
 def log(msg):
     STATE["log"](msg)
+
+
+def gen_now():
+    """지금 목소리 세부 설정({이름: 값}). 서버를 켤 때 설정 파일에서 읽고 POST /config 로 바뀐다."""
+    if STATE["gen"] is None:
+        STATE["gen"] = C.gen_from_cfg(STATE["cfg"] or {}, warn=log)
+    return STATE["gen"]
+
+
+def gap_sec():
+    return GAP + float(gen_now().get("문장_쉼_초") or 0.0)
+
+
+def gen_view():
+    eng = STATE["engine"]
+    g = gen_now()
+    out = {"engine": STATE["engine_name"], "values": {api: g[name] for api, name in C.GEN_API.items()},
+           "defaults": {api: C.GEN_LIMITS[name][2] for api, name in C.GEN_API.items()},
+           "limits": {api: list(C.GEN_LIMITS[name][:2]) for api, name in C.GEN_API.items()},
+           "live": ["temperature", "sub_temperature", "repetition_penalty", "gap"], "needs_restart": ["top_k"]}
+    if STATE["engine_name"] == "qwen" and eng is not None:
+        out["engine_now"] = {"temperature": eng.temp, "sub_temperature": eng.sub_temp, "repetition_penalty": eng.rep_pen, "top_k": eng.top_k}
+    else:
+        out["note"] = "윈도우 음성은 문장 사이 쉼(gap)만 씁니다"
+    return out
+
+
+def gen_apply(body):
+    """POST /config 본문 → (바뀐 것, 다시 켜야 하는 것). 범위를 벗어난 값이 하나라도 있으면 ValueError(아무것도 안 바뀜).
+    GEN_LOCK 안에서 부른다(말하는 도중에 엔진 값을 바꾸지 않게)."""
+    if body.get("reset") is True:
+        want = {name: C.GEN_LIMITS[name][2] for name in C.GEN_LIMITS}
+    else:
+        want, errs = {}, []
+        for api, name in C.GEN_API.items():
+            if api in body:
+                v, err = C.gen_check(name, body[api])
+                if err:
+                    errs.append(err)
+                else:
+                    want[name] = v
+        unknown = [k for k in body if k not in C.GEN_API and k != "reset"]
+        if unknown:
+            errs.append("모르는 항목: " + ", ".join(str(k)[:20] for k in unknown[:5]))
+        if errs:
+            raise ValueError(" · ".join(errs))
+    g = gen_now()
+    changed = {name: v for name, v in want.items() if g.get(name) != v}
+    restart = []
+    eng = STATE["engine"]
+    if "top_k" in changed:
+        if STATE["engine_name"] == "qwen" and eng is not None and int(eng.top_k) != int(changed["top_k"]):
+            restart.append("top_k")
+    g.update(changed)
+    if STATE["engine_name"] == "qwen" and eng is not None and hasattr(eng, "set_sampling"):
+        eng.set_sampling(temperature=g["온도"], sub_temperature=g["세부_온도"], repetition_penalty=g["반복_벌점"])
+    if changed:
+        log("세부 설정 바뀜: " + ", ".join(f"{k}={v}" for k, v in changed.items()) + (" (top_k 는 다시 켜야 반영)" if restart else ""))
+    return changed, restart
 
 
 def shown(text):
@@ -238,7 +301,9 @@ def load_qwen(cfg, device, threads):
         torch.cuda.set_per_process_memory_fraction(min(1.0, cap * 2**30 / torch.cuda.mem_get_info()[1]))
     dtype = "bfloat16"     # CPU 도 bf16 이 fp32 보다 약 2배 빠름
     refs = load_refs(folder)
-    eng = QwenVoice(model, folder, refs=refs, device=device, dtype=dtype, threads=threads, log=log)
+    g = gen_now()
+    eng = QwenVoice(model, folder, refs=refs, device=device, dtype=dtype, threads=threads, log=log,
+                    temperature=g["온도"], sub_temperature=g["세부_온도"], repetition_penalty=g["반복_벌점"], top_k=g["top_k"])
     judge = None
     vc = cfg["목소리"].get("닮음검사") or {}
     if vc.get("켜기"):
@@ -312,9 +377,10 @@ def load_engine(cfg, engine, device, threads):
 
 def cache_key(read, emotion, seed, voice=None):
     eng = STATE["engine"]
-    tag = eng.voice_tag(voice)   # 참고음성(목소리)·온도·닮음검사가 바뀌면 옛 캐시는 안 씀
+    tag = eng.voice_tag(voice)   # 참고음성(목소리)·온도 같은 샘플링 값·닮음검사가 바뀌면 옛 캐시는 안 씀
     j = "j1" if STATE["judge"] is not None and STATE["judge"].ok and not voice else "j0"
-    return hashlib.sha1(f"{STATE['engine_name']}|{tag}|t{getattr(eng, 'temp', '')}|{j}|{emotion}|{seed}|{read}".encode("utf-8")).hexdigest()[:24]
+    samp = eng.sampling_tag() if hasattr(eng, "sampling_tag") else f"t{getattr(eng, 'temp', '')}"
+    return hashlib.sha1(f"{STATE['engine_name']}|{tag}|{samp}|{j}|{emotion}|{seed}|{read}".encode("utf-8")).hexdigest()[:24]
 
 
 def synth(read_sentences, emotion, seed=None, check=True, voice=None, speed=1.0):
@@ -372,7 +438,7 @@ def synth(read_sentences, emotion, seed=None, check=True, voice=None, speed=1.0)
                 except OSError:
                     pass
         if i < len(read_sentences) - 1:
-            yield np.zeros(int(GAP * SR), np.int16), True
+            yield np.zeros(int(gap_sec() * SR), np.int16), True
 
 
 def prepare(body):
@@ -481,7 +547,9 @@ class H(BaseHTTPRequestHandler):
                                  voices_loaded=list(getattr(eng, "voices", {}) or {}) if eng else [],
                                  voice_load_sec=STATE["voice_load"], voice_fallback=STATE["voice_fallback"],
                                  vram=vram_info(), wanted_engine=STATE["wanted"],
-                                 switched_at=STATE["switched_at"], **extra))
+                                 switched_at=STATE["switched_at"], gen=gen_view()["values"], **extra))
+        elif self.path.split("?")[0] == "/config":
+            self._json(200, {"ok": True, **gen_view()})
         else:
             self._json(404, {"error": "없는 주소"})
 
@@ -489,10 +557,19 @@ class H(BaseHTTPRequestHandler):
         if not self._guard():
             return
         path = self.path.split("?")[0]
-        if path not in ("/tts", "/tts_stream", "/tts_lip", "/read"):
+        if path not in ("/tts", "/tts_stream", "/tts_lip", "/read", "/config"):
             self._json(404, {"error": "없는 주소"}); return
         body = self._body()
         if body is None:
+            return
+        if path == "/config":       # 세부 설정 바꾸기 — 엔진이 아직 준비 중이어도 값은 받아 둠(엔진이 뜨면 그 값으로)
+            try:
+                with GEN_LOCK:
+                    changed, restart = gen_apply(body)
+            except ValueError as ex:
+                self._json(400, {"ok": False, "error": str(ex), **gen_view()}); return
+            self._json(200, {"ok": True, "changed": {api: changed[name] for api, name in C.GEN_API.items() if name in changed},
+                             "restart": restart, **gen_view()})
             return
         if STATE["engine"] is None:
             self._json(503, {"error": "엔진 준비 중" if not STATE["error"] else STATE["error"]}); return
@@ -760,7 +837,7 @@ class H(BaseHTTPRequestHandler):
                 STATE["switch_after"] = f"CPU 김비서 목소리 첫 소리 {first:.1f}초 > 기준 {slow:.0f}초"
                 log(f"느림 감지: {STATE['switch_after']} → 이 답을 끝낸 뒤 윈도우 음성으로 바꿈")
             if i < len(sents) - 1 and not leading:
-                g = np.zeros(int(GAP * SR), np.int16)
+                g = np.zeros(int(gap_sec() * SR), np.int16)
                 total += len(g)
                 send(g.tobytes())
                 paced(len(g))
@@ -835,6 +912,7 @@ def main():
     cfg = C.load(a.settings)
     STATE["cfg"] = cfg
     STATE["log"] = C.Logger("voice.log", C.path(cfg, "로그"), "[목소리 서버]")
+    STATE["gen"] = C.gen_from_cfg(cfg, warn=log)
     STATE["show_text"] = bool(cfg["목소리"].get("로그_글_남기기"))
     STATE["cache_dir"] = None if a.no_cache else os.path.join(C.path(cfg, "캐시"), "tts")
     C.apply_hf_env(cfg)

@@ -7,6 +7,11 @@
   '펫' 단계가 실패해도 설치 끝내기·펫만 다시 받기·직접 받은 파일로 넣기). 이 PC 안 임시 서버만 씀. `python -m tests.unit.test_install_download`
 - `unit/test_install_progress.py` — 설치가 멈춘 것처럼 보이지 않게 하는 부분의 단위 시험(지난 시간·진전 없던 시간·살아 있음 표시·
   큰 부품을 디스크에 푸는 동안의 진행 표시·실패 까닭 한 줄). 가짜 pip 만 씀. `python -m tests.unit.test_install_progress`
+- `unit/test_text_norm.py` — 숫자·단위 한국어 읽기 단위 시험(134문장: 돈·날짜·시각·개수·전화·판 번호·소수·퍼센트·단위·영어 약어). `python -m tests.unit.test_text_norm` (`--table` 이면 변환 표)
+- `unit/test_winbox.py` — 김비서 창 옮기기·크기 조절·자리 기억 단위 시험(가짜 모니터: 배율 섞임·음수 좌표·세로·사라진 모니터). `python -m tests.unit.test_winbox`
+- `unit/test_pet_geometry.js` — 펫 자리·크기 계산 단위 시험(가짜 화면 구성). `node tests/unit/test_pet_geometry.js`
+- `unit/test_persona_voice.py` — 말투·성격·답 길이 지시문 · 목소리 세부 설정 범위 단위 시험. `python -m tests.unit.test_persona_voice`
+- `unit/test_compat_api.py` — 'OpenAI 호환 API' 두뇌 단위 시험(이 PC 안 가짜 서버 · 열쇠가 새지 않는지). `python -m tests.unit.test_compat_api`
 - `unit/test_pet_download.js` — 펫 옷 꾸러미 받기 단위 시험(이어 받기·다시 시도·깨진 파일 다시 받기). `node tests/unit/test_pet_download.js`
 - `unit/test_settings.py` — 설정 화면 단위 시험(값 검사·반영 시점·끼어들기 감도·사양 추천). `python -m tests.unit.test_settings`
 - `unit/test_voice_gender.py` — 성별→목소리 단위 시험(자동 연결·직접 고정·자산 없음 대체·voices.json 보존). `python -m tests.unit.test_voice_gender`

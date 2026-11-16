@@ -202,3 +202,32 @@ input[type="text"], input[type="password"], input[type="url"], select {
 .dialog { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 20px; max-width: 420px; width: 100%; box-shadow: 0 8px 32px rgba(0, 0, 0, .5); }
 .dialog h2 { margin: 0 0 8px; }
 .dialog p { color: var(--muted); }
+
+/* ---- 창 크기 조절 손잡이(테두리 없는 김비서 창) — 보이지 않고 커서 모양만 바뀜 */
+.rz { position: fixed; z-index: 90; touch-action: none; }
+.rz-n { top: 0; left: 12px; right: 12px; height: 5px; cursor: ns-resize; }
+.rz-s { bottom: 0; left: 12px; right: 12px; height: 5px; cursor: ns-resize; }
+.rz-w { left: 0; top: 12px; bottom: 12px; width: 5px; cursor: ew-resize; }
+.rz-e { right: 0; top: 12px; bottom: 12px; width: 5px; cursor: ew-resize; }
+.rz-nw { left: 0; top: 0; width: 12px; height: 12px; cursor: nwse-resize; }
+.rz-se { right: 0; bottom: 0; width: 14px; height: 14px; cursor: nwse-resize; }
+.rz-ne { right: 0; top: 0; width: 12px; height: 12px; cursor: nesw-resize; }
+.rz-sw { left: 0; bottom: 0; width: 12px; height: 12px; cursor: nesw-resize; }
+body.sizable #app::after { content: ""; position: absolute; right: 3px; bottom: 3px; width: 9px; height: 9px; pointer-events: none;
+  border-right: 2px solid #3a3e4a; border-bottom: 2px solid #3a3e4a; border-bottom-right-radius: 3px; opacity: .8; }   /* 오른쪽 아래 귀퉁이 표시 */
+.win-drag { -webkit-user-select: none; user-select: none; }
+
+/* ---- 설정: 슬라이더·성격 글 칸 */
+.slider { margin: 14px 0 4px; }
+.slider.off { opacity: .5; }
+.slider-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.slider-head label { font-weight: 500; }
+.slider-head output { color: var(--accent-ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+.slider input[type="range"] { width: 100%; height: 28px; margin: 4px 0 0; accent-color: var(--accent); background: transparent; }
+.slider-ends { display: flex; justify-content: space-between; color: var(--muted); font-size: .8rem; font-variant-numeric: tabular-nums; }
+.slider .hint { margin: 2px 0 0; }
+textarea { width: 100%; box-sizing: border-box; min-height: 84px; padding: 10px 12px; font: inherit; color: var(--text); background: var(--field);
+  border: 1px solid var(--line); border-radius: 8px; resize: vertical; }
+textarea:focus-visible, input[type="range"]:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 2px; }
+.tag.pick { padding: 4px 12px; cursor: pointer; color: var(--muted); font: inherit; font-size: .867rem; }
+.tag.pick:hover { color: var(--text); border-color: #3a3e4a; }

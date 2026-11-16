@@ -2,11 +2,13 @@
 //   구독 클로드 / 구독 GPT : 이 PC 의 claude·codex 설치·로그인 상태(/api/brain/options) · '로그인 창 열기' · 설치 안내 · 연결 시험
 //   내 PC(Gemma)          : 설치됨·크기·판 · 판 고르기(E4B 보통 / E2B 가벼움) · 'Gemma 설치·다시 설치·이 판으로 바꾸기'(받는 중 진행) · 'Gemma 삭제'
 //   내 로컬 AI 주소 / API 열쇠 GPT·클로드 : 주소·모델·열쇠(이 PC 에만 암호로 저장)
+//   OpenAI 호환 API(compat)  : 바깥 서비스 주소·모델·내 API 열쇠 · '모델 목록 불러오기' · 대화가 그 서비스로 간다는 알림
 "use strict";
 
 function brainDraftFrom(c) {
   const kind = get(c, "두뇌.방식", "local");
   return {방식: kind, 주소: kind === "url" ? get(c, "두뇌.주소", "") : "", 모델: get(c, "두뇌.모델", ""), 모드: get(c, "두뇌.모드", "빠른"),
+    호환_주소: get(c, "두뇌.호환_주소", ""), 호환_모델: get(c, "두뇌.호환_모델", ""),
     openai_모델: get(c, "두뇌.openai_모델", ""), claude_모델: get(c, "두뇌.claude_모델", "claude-opus-5-5"),
     구독_클로드_모델: get(c, "두뇌.구독_클로드_모델", "haiku"), 구독_GPT_생각: get(c, "두뇌.구독_GPT_생각", "")};
 }
@@ -16,6 +18,7 @@ function brainPack(d) {
   const o = {방식: d.방식};
   if (d.모드) o.모드 = d.모드;
   if (d.방식 === "url") { o.주소 = d.주소 || ""; o.모델 = d.모델 || ""; }
+  if (d.방식 === "compat") { o.호환_주소 = d.호환_주소 || ""; o.호환_모델 = d.호환_모델 || ""; }
   if (d.방식 === "openai" && d.openai_모델) o.openai_모델 = d.openai_모델;
   if (d.방식 === "claude") o.claude_모델 = d.claude_모델;
   if (d.방식 === "claude_cli") o.구독_클로드_모델 = d.구독_클로드_모델 || "haiku";
@@ -149,6 +152,28 @@ function BrainPanel(d, opts) {
       a.addEventListener("input", () => { d.주소 = a.value.trim(); });
       m.addEventListener("input", () => { d.모델 = m.value.trim(); });
       detail.append(field("주소(OpenAI 호환)", a), field("모델 이름", m), keyRow("url", "열쇠(필요할 때만)"));
+    } else if (k === "compat") {
+      // OpenAI 호환 API: 주소 · 모델(직접 넣거나 목록에서 고름) · 내 API 열쇠
+      const a = h("input", {type: "url", id: idp + "-compat-addr", value: d.호환_주소 || "", placeholder: "예: https://api.서비스이름.com/v1", autocomplete: "off"});
+      const m = h("input", {type: "text", id: idp + "-compat-model", value: d.호환_모델 || "", placeholder: "모델 이름(그 서비스의 안내에 나온 이름)", autocomplete: "off"});
+      const list = h("div", {class: "tags", id: idp + "-compat-models"});
+      const note = h("p", {class: "hint", id: idp + "-compat-note"});
+      a.addEventListener("input", () => { d.호환_주소 = a.value.trim(); });
+      m.addEventListener("input", () => { d.호환_모델 = m.value.trim(); });
+      const load = h("button", {class: "btn", type: "button", id: idp + "-compat-load", text: "모델 목록 불러오기", onclick: async () => {
+        note.textContent = "불러오는 중이에요."; list.replaceChildren();
+        try {
+          const r = await api("/api/brain/models", {"두뇌": {방식: "compat", 호환_주소: d.호환_주소 || ""}});
+          if (!r.ok) { note.textContent = r["오류"] || "불러오지 못했어요."; return; }
+          const all = r["모델"] || [];
+          note.textContent = `모델 ${all.length}개 — 눌러서 고르세요.` + (all.length > 40 ? " (많아서 앞의 40개만 보여요. 이름을 직접 넣어도 돼요)" : "");
+          for (const id of all.slice(0, 40)) {
+            list.appendChild(h("button", {class: "tag pick", type: "button", text: id, onclick: () => { m.value = id; d.호환_모델 = id; }}));
+          }
+        } catch (e) { note.textContent = e.message; }
+      }});
+      detail.append(field("주소(OpenAI 호환)", a, "그 서비스가 알려 주는 'OpenAI 호환 주소(base URL)'를 넣어요. 보통 /v1 로 끝나요."),
+        keyRow("compat", "API 열쇠"), field("모델 이름", m), h("div", {class: "row"}, load), note, list);
     } else if (k === "openai") {
       const m = h("input", {type: "text", id: idp + "-gpt-model", value: d.openai_모델 || "", placeholder: "모델 이름(예: gpt-5.6-luna)"});
       m.addEventListener("input", () => { d.openai_모델 = m.value.trim(); });
@@ -159,7 +184,9 @@ function BrainPanel(d, opts) {
         keyRow("claude", "Anthropic API 열쇠"));
     }
     if (k === "local" || (opts && opts.showGemma)) detail.appendChild(gemmaRow());
-    if (k !== "local") detail.appendChild(notice("warn", "알아 두세요", "이 방식을 고르면 대화 글이 그 회사나 그 서버로 보내져요."));
+    if (k === "compat") detail.appendChild(notice("warn", "알아 두세요", "이 방식을 고르면 대화 글(묻는 말·김비서의 답·도구가 찾아온 내용)이 그 주소의 서비스로 보내져요. "
+      + "요금과 대화 보관 방식은 그 서비스의 약관을 따라요. 열쇠는 이 PC 에만 암호화해서 저장하고(윈도우 계정으로만 풀 수 있어요), 화면·기록에는 남기지 않아요."));
+    else if (k !== "local") detail.appendChild(notice("warn", "알아 두세요", "이 방식을 고르면 대화 글이 그 회사나 그 서버로 보내져요."));
   };
   const group = h("div", {});
   const drawGroup = () => group.replaceChildren(choiceGroup(ch["두뇌"].map((x) => ({값: x.id,

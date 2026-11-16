@@ -8,8 +8,9 @@
 # 빠르게
 #   - qwen_tts 원래 generate 는 프레임(80ms)마다 HF generate 2번 → 느림.
 #     여기서는 같은 가중치로 토커·코드예측기 정적 KV 캐시 + 직접 샘플링(top-k 50·반복벌점 1.05·EOS 규칙은 원래와 같음.
-#     온도는 토커 0.7(원래 0.9 — 문장마다 목소리 흔들림이 줄어 바꿈)·코드예측기 0.9.
-#     주의: CUDA 그래프는 온도를 캡처 때 값으로 굳힘 → 온도를 바꾸려면 엔진을 새로 만들 것.)
+#     온도는 토커 0.7(원래 0.9 — 문장마다 목소리 흔들림이 줄어 바꿈)·코드예측기 0.9 가 기본.
+#     온도·반복벌점은 텐서 자리에 두어 set_sampling() 으로 켜진 채 바꿀 수 있음(CUDA 그래프가 그 자리를 다시 읽음).
+#     top-k 는 그래프 모양에 굳으므로 바꾸려면 엔진을 새로 만들 것.)
 #   - GPU 면 한 프레임 전체를 CUDA 그래프로, CPU 면 그냥 실행.
 #   - 코덱은 인과적이라 앞 문맥 프레임을 겹쳐 조각 단위로 복원 → 첫 조각부터 바로 내보냄(스트리밍).
 # 프롬프트(참고음성+글 임베딩)는 qwen_tts 의 generate_voice_clone 을 그대로 부르고 talker.generate 직전에 가로채서 만든다
@@ -189,8 +190,13 @@ class QwenVoice:
         self.eos = tc.codec_eos_token_id
         self.max_len = self.BUCKETS[-1]
         self.left_context = left_context
-        self.top_k, self.sub_top_k, self.rep_pen = top_k, sub_top_k, repetition_penalty
-        self.temp, self.sub_temp = temperature, sub_temperature
+        self.top_k, self.sub_top_k = int(top_k), int(sub_top_k)     # top-k 는 그래프 모양에 굳음 — 바꾸려면 엔진을 새로
+        # 온도·반복 벌점은 '텐서 자리'로 둔다. CUDA 그래프는 캡처 때 값이 아니라 이 자리를 다시 읽으므로
+        # set_sampling() 으로 값을 바꾸면 엔진을 새로 만들지 않아도 다음 문장부터 반영된다.
+        f32 = dict(device=self.dev, dtype=torch.float32)
+        self._temp_t = torch.tensor(float(temperature), **f32)
+        self._sub_temp_t = torch.tensor(float(sub_temperature), **f32)
+        self._rep_t = torch.tensor(float(repetition_penalty), **f32)
         fuse = not self.cuda
         self.T = _Layers(self.t_layers, tc.num_attention_heads, tc.num_key_value_heads, tc.head_dim,
                          tc.rms_norm_eps, self.max_len, self.dev, self.dtype, fuse)
@@ -220,6 +226,35 @@ class QwenVoice:
         self.load_sec = time.time() - t0
         if verbose:
             log(f"[목소리 엔진] {self.dev} {dtype} 준비 {self.load_sec:.1f}초, 감정 {list(self.prompts)}")
+
+    # ---------- 샘플링 값(설정 화면 '목소리 세부 설정') ----------
+    @property
+    def temp(self):
+        return round(float(self._temp_t), 4)
+
+    @property
+    def sub_temp(self):
+        return round(float(self._sub_temp_t), 4)
+
+    @property
+    def rep_pen(self):
+        return round(float(self._rep_t), 4)
+
+    def set_sampling(self, temperature=None, sub_temperature=None, repetition_penalty=None):
+        """온도(토커)·세부 온도(코드 예측기)·반복 벌점을 바꾼다 — 다음 문장부터. 범위 검사는 부르는 쪽(목소리 서버)이 한다.
+        말하는 도중에는 부르지 말 것(목소리 서버는 만들기 잠금 안에서 부름)."""
+        with torch.no_grad():
+            if temperature is not None:
+                self._temp_t.fill_(float(temperature))
+            if sub_temperature is not None:
+                self._sub_temp_t.fill_(float(sub_temperature))
+            if repetition_penalty is not None:
+                self._rep_t.fill_(float(repetition_penalty))
+        return {"temperature": self.temp, "sub_temperature": self.sub_temp, "repetition_penalty": self.rep_pen, "top_k": self.top_k}
+
+    def sampling_tag(self):
+        """캐시 열쇠용 — 샘플링 값이 바뀌면 옛 소리 캐시를 쓰지 않게."""
+        return f"t{self.temp}s{self.sub_temp}r{self.rep_pen}k{self.top_k}"
 
     # ---------- 참고음성 ----------
     def build_prompts(self, refs, ref_dir, anchor_xvec=True):
@@ -288,7 +323,7 @@ class QwenVoice:
 
     def _talker_logits(self, h):
         logits = self.codec_head(h).float().view(1, -1)
-        pen = torch.where(logits > 0, logits / self.rep_pen, logits * self.rep_pen)
+        pen = torch.where(logits > 0, logits / self._rep_t, logits * self._rep_t)
         logits = torch.where(self.seen.view(1, -1), pen, logits)
         return logits + self.suppress + self.eos_bias
 
@@ -301,7 +336,7 @@ class QwenVoice:
         hs = _rms(x[:, -1:], cp.model.norm.weight, C.eps)
         codes = [code0.view(1)]
         emb_sum = e0.float()
-        c = self._sample(cp.lm_head[0](hs).float().view(1, -1), self.sub_top_k, self.sub_temp)
+        c = self._sample(cp.lm_head[0](hs).float().view(1, -1), self.sub_top_k, self._sub_temp_t)
         for g in range(1, self.n_groups - 1):
             codes.append(c.view(1))
             e = cp.model.codec_embedding[g - 1](c).view(1, 1, -1)
@@ -309,7 +344,7 @@ class QwenVoice:
             p = g + 1
             y = C.step_static(cp.small_to_mtp_projection(e), self.c_cos[p:p + 1], self.c_sin[p:p + 1], p)
             hs = _rms(y, cp.model.norm.weight, C.eps)
-            c = self._sample(cp.lm_head[g](hs).float().view(1, -1), self.sub_top_k, self.sub_temp)
+            c = self._sample(cp.lm_head[g](hs).float().view(1, -1), self.sub_top_k, self._sub_temp_t)
         codes.append(c.view(1))
         emb_sum = emb_sum + cp.model.codec_embedding[self.n_groups - 2](c).view(1, 1, -1).float()
         return torch.cat(codes), emb_sum.to(self.dtype)
@@ -334,7 +369,7 @@ class QwenVoice:
         mask = (self.ar[:bucket] <= self.g_pos).view(1, 1, 1, bucket)
         y = self.T.step_dynamic(x, cos, sin, self.g_pos, mask, bucket)
         h = _rms(y, self.norm_w, self.T.eps)
-        nxt = self._sample(self._talker_logits(h), self.top_k, self.temp)
+        nxt = self._sample(self._talker_logits(h), self.top_k, self._temp_t)
         self.seen.index_fill_(0, nxt.view(1), True)
         self.g_code0.copy_(nxt.view(1, 1))
         self.g_h.copy_(h)
@@ -405,7 +440,7 @@ class QwenVoice:
         self.eos_bias[self.eos] = float("-inf")           # min_new_tokens=2
         y = T.prefill(x, self.t_cos[:L].view(1, 1, L, -1), self.t_sin[:L].view(1, 1, L, -1))
         h = _rms(y[:, -1:], self.norm_w, T.eps)
-        code0 = self._sample(self._talker_logits(h), self.top_k, self.temp)
+        code0 = self._sample(self._talker_logits(h), self.top_k, self._temp_t)
         self.seen.index_fill_(0, code0.view(1), True)
         n_trail = trailing.shape[1]
         produced, emitted, hit_eos, first_t = 0, 0, False, None
@@ -445,7 +480,7 @@ class QwenVoice:
                     produced += 1
                     if produced == 2:
                         self.eos_bias[self.eos] = 0.0
-                    code0 = self._sample(self._talker_logits(h), self.top_k, self.temp)
+                    code0 = self._sample(self._talker_logits(h), self.top_k, self._temp_t)
                     self.seen.index_fill_(0, code0.view(1), True)
                 if not hit_eos and int(code0) == self.eos:
                     hit_eos = True

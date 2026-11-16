@@ -181,7 +181,7 @@ def test_subscription_fields():
     _c, err, _w = S.validate({"두뇌": {"구독_GPT_생각": "아주많이"}}, cfg)
     assert "두뇌.구독_GPT_생각" in err
     ids = [x["id"] for x in S.choices()["두뇌"]]
-    assert ids[:2] == ["claude_cli", "codex_cli"] and set(ids) == {"claude_cli", "codex_cli", "local", "url", "openai", "claude"}
+    assert ids[:2] == ["claude_cli", "codex_cli"] and set(ids) == {"claude_cli", "codex_cli", "local", "url", "compat", "openai", "claude"}
 
 
 def test_cli_detect_fake():

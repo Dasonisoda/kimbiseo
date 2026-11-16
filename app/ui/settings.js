@@ -89,10 +89,52 @@ const Settings = {
       (v) => { honor = v; custom.value = ""; }, {idp: "set-honor"});
     custom.addEventListener("input", () => { honor = custom.value.trim(); grp.select("\u0000"); });
     const place = h("input", {type: "text", id: "set-place", maxlength: "30", value: get(c, "사용자.기본장소", "")});
-    const tone = choiceGroup([{값: "존댓말", 이름: "존댓말"}, {값: "편한 존댓말", 이름: "편한 존댓말"}], get(c, "비서.말투", "존댓말"), (v) => { this.tone = v; }, {idp: "set-tone"});
-    this.tone = get(c, "비서.말투", "존댓말");
-    s2.append(grp, field("직접 입력", custom), h("p", {class: "big-q", text: "말투"}), tone, field("사는 곳(날씨 기본 장소)", place));
-    s2.appendChild(this.saveRow("set-honor-save", () => ({사용자: {호칭: honor, 기본장소: place.value.trim()}, 비서: {말투: this.tone}})));
+    s2.append(grp, field("직접 입력", custom), field("사는 곳(날씨 기본 장소)", place));
+    s2.appendChild(this.saveRow("set-honor-save", () => ({사용자: {호칭: honor, 기본장소: place.value.trim()}})));
+
+    // 말투·성격·답 길이 — 두뇌 지시문에 들어감(지금 대화에도 바로)
+    const s3 = this.section(card, "말투와 성격", ["비서.말투", "비서.성격", "비서.답길이"]);
+    let tone = get(c, "비서.말투", "auto"), len = get(c, "비서.답길이", "보통");
+    const toneNow = get(c, "비서.말투_해석", null);
+    const toneHint = h("p", {class: "hint", id: "set-tone-now",
+      text: toneNow && toneNow["자동"] ? `지금은 펫 성별(${toneNow["성별"]})에 맞춰 '${toneNow["말투"]}'로 말해요. 다른 말투를 골라 저장하면 그 말투로 고정돼요.`
+        : "지금은 고른 말투로 고정돼 있어요. '자동'을 고르면 펫 성별에 맞춰 바뀌어요."});
+    const maxLen = ch["성격_최대_글자"] || 200;
+    const persona = h("textarea", {id: "set-persona", maxlength: String(maxLen), rows: "3",
+      placeholder: "예: 밝고 장난기가 많아요. 칭찬을 자주 해 줘요."});
+    persona.value = get(c, "비서.성격", "");
+    const count = h("span", {class: "hint", id: "set-persona-count"});
+    const drawCount = () => { count.textContent = `${persona.value.length} / ${maxLen}글자`; };
+    persona.addEventListener("input", drawCount);
+    drawCount();
+    const chips = h("div", {class: "tags", id: "set-persona-examples"}, (ch["성격_예시"] || []).map((x) => h("button", {type: "button", class: "tag pick", text: x, onclick: () => {
+      const cur = persona.value.trim();
+      if (cur.includes(x)) return;
+      persona.value = (cur ? cur.replace(/[.\s]*$/, ". ") : "") + x + ".";
+      if (persona.value.length > maxLen) persona.value = persona.value.slice(0, maxLen);
+      drawCount();
+    }})));
+    const dropBox = h("div", {id: "set-persona-warn"});
+    const drawDrop = (list) => {
+      dropBox.replaceChildren();
+      if (list && list.length) dropBox.appendChild(notice("warn", "이 문장은 두뇌에 전달하지 않아요", list.map((x) => `'${x}'`).join(" · ") + " — 성격 설명에는 말투·분위기만 적어 주세요. 규칙을 바꾸는 말은 따르지 않아요."));
+    };
+    drawDrop(get(c, "비서.성격_빠짐", []));
+    s3.append(h("p", {class: "big-q", text: "말투"}),
+      choiceGroup((ch["말투"] || []).map((x) => ({값: x.id, 이름: x["이름"], 설명: x["설명"]})), tone, (v) => { tone = v; }, {wide: true, idp: "set-tone"}), toneHint,
+      h("p", {class: "big-q", text: "답 길이"}),
+      choiceGroup((ch["답길이"] || []).map((x) => ({값: x.id, 이름: x["이름"], 설명: x["설명"]})), len, (v) => { len = v; }, {idp: "set-length"}),
+      h("p", {class: "big-q", text: "성격 설명(자유롭게)"}),
+      h("p", {class: "hint", text: "어떤 분위기로 말하면 좋을지 적어 주세요. 말투와 분위기에만 반영돼요(도구 쓰는 법이나 기본 규칙은 바뀌지 않아요)."}),
+      persona, h("div", {class: "row between"}, count), chips, dropBox);
+    s3.appendChild(h("div", {class: "row end"}, h("button", {class: "btn primary", type: "button", id: "set-persona-save", text: "저장", onclick: async (e) => {
+      e.target.disabled = true;
+      try {
+        const r = await saveSettings({비서: {말투: tone, 답길이: len, 성격: persona.value.trim()}});
+        drawDrop(get(r["설정"], "비서.성격_빠짐", []));
+      } catch (err) { toast("저장하지 못했어요: " + err.message, 7000); }
+      finally { e.target.disabled = false; }
+    }})));
   },
 
   // 펫
@@ -109,6 +151,37 @@ const Settings = {
     }, {idp: "set-gender"}), list, h("p", {class: "hint", text: "성별을 바꾸면 어울리는 말투로 바뀌고, 목소리는 펫이 입은 옷에 맞춰 자동으로 바뀌어요(직접 고른 경우는 그대로). 고른 캐릭터의 옷이 아직 없으면 펫이 받아 와요(옷 받기에 동의했을 때). 호칭은 '이름·호칭'에서 바꿔요."}));
     draw();
     s.appendChild(this.saveRow("set-pet-save", () => ({펫: {성별: sex, 옷: pet}})));
+
+    // 펫 크기 — 펫이 제 설정에 기억함(펫 오른쪽 클릭 메뉴의 '크기'와 같은 값). 펫이 켜져 있을 때만 바꿀 수 있음.
+    const s2 = h("div", {class: "set-sec", id: "set-petsize"}, h("h2", {}, "펫 크기", h("span", {class: "when now", text: "바로 적용"})));
+    card.appendChild(s2);
+    const box = h("div", {id: "set-petsize-box"}, h("p", {class: "hint", text: "펫을 살펴보는 중이에요."}));
+    s2.appendChild(box);
+    api("/api/pet/size").then((j) => {
+      box.replaceChildren();
+      if (!j.ok) { box.appendChild(h("p", {class: "hint", id: "set-petsize-off", text: j["오류"] || "펫이 꺼져 있어요."})); return; }
+      const lo = (j["범위"] || [50, 200])[0], hi = (j["범위"] || [50, 200])[1];
+      let pct = Number(j["퍼센트"] || 100);
+      const label = (p) => `${p}%`;
+      const out = h("output", {id: "set-petsize-out", for: "set-petsize-range", text: label(pct)});
+      const range = h("input", {type: "range", id: "set-petsize-range", min: String(lo), max: String(hi), step: "5", value: String(pct), "aria-valuetext": label(pct)});
+      const send = async (p) => {
+        p = Math.min(hi, Math.max(lo, Math.round(Number(p) / 5) * 5));
+        try {
+          const r = await api("/api/pet/size", {"퍼센트": p});
+          pct = Number(r["퍼센트"] || p);
+          range.value = String(pct); out.textContent = label(pct); range.setAttribute("aria-valuetext", label(pct));
+        } catch (e) { toast("펫 크기를 바꾸지 못했어요: " + e.message, 6000); }
+      };
+      range.addEventListener("input", () => { out.textContent = label(range.value); });
+      range.addEventListener("change", () => send(range.value));
+      box.append(h("div", {class: "slider"},
+        h("div", {class: "slider-head"}, h("label", {for: "set-petsize-range", text: "펫 크기"}), out), range,
+        h("div", {class: "slider-ends"}, h("span", {text: label(lo)}), h("span", {text: "보통 100%"}), h("span", {text: label(hi)}))),
+      h("div", {class: "row"}, [["작게", 76], ["보통", 100], ["크게", 132], ["아주 크게", 172]].map(([n, p]) =>
+        h("button", {class: "btn", type: "button", id: "set-petsize-" + p, text: n, onclick: () => send(p)}))),
+      h("p", {class: "hint", text: "펫을 오른쪽 클릭하면 나오는 메뉴의 '크기'와 같은 설정이에요. 화면보다 크게는 커지지 않아요."}));
+    }).catch(() => { box.replaceChildren(h("p", {class: "hint", text: "펫 크기를 읽지 못했어요."})); });
     card.appendChild(PetRuntime.section());
   },
 
@@ -151,15 +224,72 @@ const Settings = {
     const s2 = this.section(card, "목소리 견본과 빠르기", ["목소리.목소리", "목소리.말속도"]);
     let voice = get(c, "목소리.목소리", "auto"), speed = get(c, "목소리.말속도", 1.0);
     const st = h("p", {class: "hint", id: "set-voice-status"});
+    let vdSpeedSet = null;      // 아래 '세부 설정'의 말 빠르기 슬라이더와 같은 값을 가리킴
+    const speedGrp = choiceGroup(ch["말속도"].map((x) => ({값: x, 이름: x === 1 ? "보통" : x + "배"})), speed, (v) => { speed = v; if (vdSpeedSet) vdSpeedSet(v, true); }, {idp: "set-speed"});
     s2.append(choiceGroup(ch["목소리"].map((x) => ({값: x.id, 이름: x["이름"] + (x["준비"] ? "" : " (준비 중)"), 설명: x["설명"], 막음: !x["준비"]})), voice, (v) => { voice = v; }, {wide: true, idp: "set-voice"}),
       h("p", {class: "big-q", text: "말 빠르기"}),
-      choiceGroup(ch["말속도"].map((x) => ({값: x, 이름: x === 1 ? "보통" : x + "배"})), speed, (v) => { speed = v; }, {idp: "set-speed"}),
+      speedGrp,
       h("div", {class: "row"}, h("button", {class: "btn", type: "button", id: "set-voice-play", text: "들어 보기", onclick: () => playSample(voice, st)})), st);
     const vh = get(c, "목소리.해석", null);
     if (vh && vh["대체"] && vh["이유"]) s2.append(notice("warn", "목소리 참고음성이 아직 없어요", vh["이유"]));
     else if (vh && vh["자동"]) s2.append(h("p", {class: "hint", text: "지금은 펫이 입은 옷(펫이 꺼져 있으면 펫 성별)에 맞춰 목소리를 자동으로 고르고 있어요. 다른 목소리를 골라 저장하면 그 목소리로 고정돼요."}));
     else if (vh && vh["고정"]) s2.append(h("p", {class: "hint", text: "지금은 고른 목소리로 고정돼 있어요. '옷에 맞춤(자동)'을 고르면 펫 옷을 갈아입을 때 목소리도 같이 바뀌어요."}));
     s2.append(this.saveRow("set-voice-save", () => ({목소리: {목소리: voice, 말속도: speed}})));
+
+    // 세부 설정 — 온도·쉼·빠르기. 슬라이더라 범위 밖 값은 넣을 수 없고, 본체·목소리 서버도 범위를 한 번 더 막는다.
+    const rows = ch["목소리_세부"] || [];
+    if (rows.length) {
+      const s4 = this.section(card, "세부 설정", rows.filter((r) => r.key !== "top_k").map((r) => "목소리." + r.key));
+      s4.id = "set-vd";
+      const vals = {}, ctl = {};
+      const fmt = (r, v) => (r["정수"] ? String(Math.round(v)) : Number(v).toFixed(2)) + (r["단위"] || "");
+      s4.appendChild(h("p", {class: "hint", text: "김비서 목소리가 말하는 느낌을 조금씩 바꿀 수 있어요. 잘 모르겠으면 그대로 두세요 — '기본값으로'를 누르면 처음 값으로 돌아가요."}));
+      rows.forEach((r) => {
+        const key = r.key, cur = Number(get(c, "목소리." + key, r["기본"]));
+        vals[key] = cur;
+        const out = h("output", {id: `set-vd-${key}-out`, for: `set-vd-${key}`, text: fmt(r, cur)});
+        const range = h("input", {type: "range", id: `set-vd-${key}`, min: String(r.min), max: String(r.max), step: String(r.step), value: String(cur),
+          "aria-valuetext": fmt(r, cur)});
+        const set = (v, fromPreset) => {
+          v = Math.min(r.max, Math.max(r.min, Number(v)));          // 범위 밖 값은 받지 않음
+          vals[key] = r["정수"] ? Math.round(v) : Math.round(v * 1000) / 1000;
+          range.value = String(vals[key]); out.textContent = fmt(r, vals[key]); range.setAttribute("aria-valuetext", fmt(r, vals[key]));
+          if (key === "말속도" && !fromPreset) { speed = vals[key]; speedGrp.select(vals[key]); }   // 위의 빠르기 단추와 맞춤
+        };
+        if (key === "말속도") vdSpeedSet = set;
+        range.addEventListener("input", () => set(range.value));
+        ctl[key] = {set, def: r["기본"]};
+        const off = r["엔진"] === "qwen" && get(c, "목소리.엔진", "qwen") === "windows";
+        s4.appendChild(h("div", {class: "slider" + (off ? " off" : ""), "data-key": key},
+          h("div", {class: "slider-head"}, h("label", {for: range.id, text: r["이름"]}), out),
+          range,
+          h("div", {class: "slider-ends"}, h("span", {text: fmt(r, r.min)}), h("span", {text: "기본 " + fmt(r, r["기본"])}), h("span", {text: fmt(r, r.max)})),
+          h("p", {class: "hint", text: r["설명"] + (off ? " (지금 고른 윈도우 기본 음성에는 쓰이지 않아요.)" : "")})));
+      });
+      const st2 = h("p", {class: "hint", id: "set-vd-status"});
+      const collect = () => { const o = {}; rows.forEach((r) => { o[r.key] = vals[r.key]; }); return {목소리: o}; };
+      const save = async (btn, after) => {
+        btn.disabled = true;
+        try { await saveSettings(collect()); if (after) await after(); }
+        catch (err) { toast("저장하지 못했어요: " + err.message, 7000); }
+        finally { btn.disabled = false; }
+      };
+      const sample = async () => {
+        const el = document.getElementById("sample");
+        st2.textContent = "목소리를 만드는 중이에요.";
+        try {
+          await KAudio.setSink(el, get(K.cfg, "화면.스피커", ""));
+          const blob = await api("/api/voice/sample", {"목소리": voice, "글": "안녕하세요. 지금은 오후 3시 30분이에요. 오늘 할 일은 2개, 내일은 12개월 만의 휴가예요."});
+          el.src = URL.createObjectURL(blob);
+          st2.textContent = "바꾼 값으로 말해 봤어요. 마음에 들지 않으면 '기본값으로'를 눌러 주세요.";
+          el.play().catch(() => { st2.textContent = "소리를 틀지 못했어요. 스피커를 확인해 주세요."; });
+        } catch (e) { st2.textContent = e.status === 503 ? "목소리 서버가 꺼져 있어요. 김비서를 다시 켠 뒤 들어 보세요." : "목소리를 만들지 못했어요: " + e.message; }
+      };
+      s4.append(h("div", {class: "row end"},
+        h("button", {class: "btn", type: "button", id: "set-vd-reset", text: "기본값으로", onclick: (e) => { rows.forEach((r) => ctl[r.key].set(r["기본"])); save(e.target); }}),
+        h("button", {class: "btn", type: "button", id: "set-vd-play", text: "저장하고 들어 보기", onclick: (e) => save(e.target, sample)}),
+        h("button", {class: "btn primary", type: "button", id: "set-vd-save", text: "저장", onclick: (e) => save(e.target)})), st2);
+    }
     const s3 = this.section(card, "받아쓰기(귀) 장치", ["귀.장치"]);
     let ear = get(c, "귀.장치", "auto");
     s3.append(h("p", {class: "hint", text: "보통은 '자동'이 가장 빨라요. CPU 로 하면 그래픽 메모리를 두뇌·김비서 목소리에 남기지만, 한 문장 받아쓰는 데 몇 초 더 걸려요."}),

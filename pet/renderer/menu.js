@@ -32,6 +32,15 @@
       b.onclick = () => pick('size', z);
       s.appendChild(b);
     }
+    const fine = $('sizefine');   // 세밀 크기: 5%씩(50~200%) — 김비서 설정 → 펫 의 슬라이더와 같은 값
+    if (fine) {
+      fine.textContent = '';
+      const pct = S.sizePct || 100, rng = S.sizeRange || [50, 200];
+      const dn = el('button', 'btn', ['조금 작게']); dn.dataset.sizestep = 'down'; dn.disabled = pct <= rng[0]; dn.onclick = () => pick('size-step', 'down');
+      const up = el('button', 'btn', ['조금 크게']); up.dataset.sizestep = 'up'; up.disabled = pct >= rng[1]; up.onclick = () => pick('size-step', 'up');
+      const lab = el('span', 'pct', [pct + '%']); lab.id = 'sizepct';
+      fine.append(dn, lab, up);
+    }
     const mu = $('music'); mu.textContent = '';   // 춤 노래 크기(기본 보통 = 목소리보다 작게) — 춤 노래를 끈 판이면 칸째 숨김
     mu.style.display = $('music-h').style.display = (S.musicLevels || []).length ? '' : 'none';
     for (const z of S.musicLevels || []) {

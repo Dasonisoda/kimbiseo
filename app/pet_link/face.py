@@ -114,6 +114,22 @@ def pet_call(cfg, path, body=None, timeout=3.0):
         return None, {}
 
 
+def pet_get(cfg, path, timeout=2.0):
+    """펫 입구에서 읽기(GET /status 등). → (상태 코드|None, JSON). 펫이 꺼져 있으면 (None, {})."""
+    try:
+        c = http.client.HTTPConnection("127.0.0.1", int(cfg["포트"]["펫"]), timeout=timeout)
+        c.request("GET", path, headers={"Host": "127.0.0.1"})
+        r = c.getresponse()
+        raw = r.read()
+        c.close()
+        try:
+            return r.status, json.loads(raw.decode("utf-8") or "{}")
+        except ValueError:
+            return r.status, {}
+    except (OSError, http.client.HTTPException, KeyError, TypeError, ValueError):
+        return None, {}
+
+
 def mode_on(cfg):
     return str((cfg.get("화면") or {}).get("얼굴") or "기본") == "펫"
 

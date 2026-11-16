@@ -142,8 +142,8 @@ class Session:
             if st.pet is not None:
                 st.pet.names = [st.names.name] + [a for a in C.names(cfg)[1]]
             done.append("깨우는 이름")
-        if self.context is not None and keys & {"비서.이름", "비서.말투", "사용자.호칭", "사용자.기본장소", "화면.얼굴"}:
-            # 지시문(자기소개·호칭)을 새로 — 앞부분이 바뀌므로 두뇌 캐시는 한 번 다시 읽음(캐시 가드는 공통 앞부분만 허용)
+        if self.context is not None and keys & {"비서.이름", "비서.말투", "비서.성격", "비서.답길이", "사용자.호칭", "사용자.기본장소", "화면.얼굴"}:
+            # 지시문(자기소개·호칭·말투·성격·답 길이)을 새로 — 앞부분이 바뀌므로 두뇌 캐시는 한 번 다시 읽음(캐시 가드는 공통 앞부분만 허용)
             msgs = list(self.context.messages)
             if msgs and isinstance(msgs[0], dict) and msgs[0].get("role") == "system":
                 msgs[0] = {"role": "system", "content": prompt.system_prompt(cfg, getattr(self, "specs", ()),
@@ -151,10 +151,12 @@ class Session:
                 self.context.set_messages(msgs)
                 if getattr(self, "cli", False) and hasattr(self.llm, "prepare"):   # 구독 두뇌: 새 지시문으로 세션을 다시(지금까지 대화는 이어서)
                     asyncio.ensure_future(self.llm.prepare(msgs[0]["content"], list(self.llm.be.history)))
-                done.append("자기소개·호칭")
+                done.append("자기소개·호칭·말투")
         if "목소리.말속도" in keys:
             st.speed = float((cfg.get("목소리") or {}).get("말속도", 1.0) or 1.0)
             done.append("말 빠르기")
+        if "목소리.문장_쉼_초" in keys:
+            done.append("문장 사이 쉼")       # 목소리 부품이 문장마다 설정을 다시 읽음(tts.VoiceTTS.run_tts)
         if "대화.이름부르기" in keys:
             st.always_name = bool((cfg.get("대화") or {}).get("이름부르기", False))
             st.set_wake(st.always_name, why="설정")

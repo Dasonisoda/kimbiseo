@@ -58,8 +58,53 @@ DEFAULTS = {
         "미리만들기": True,          # phrases.txt 의 말을 켤 때 미리 만들어 캐시에 둠
         "닮음검사": {"켜기": False, "모델": "", "도우미_파이썬": ""},
         "로그_글_남기기": False,
+        # 세부 설정(설정 화면 → 목소리 → 세부 설정). 범위는 GEN_LIMITS — 벗어난 값은 기본값으로 읽음
+        "온도": 0.7,               # 김비서 목소리(qwen) 억양 변화. 낮을수록 늘 비슷하게
+        "세부_온도": 0.9,           # 소리 잔결(코드 예측기)
+        "반복_벌점": 1.05,
+        "top_k": 50,               # 서버를 켤 때만 읽음(그래픽카드 그래프에 굳는 값)
+        "문장_쉼_초": 0.0,          # 문장 사이에 더 넣는 쉼
     },
 }
+
+# 목소리 세부 설정이 받을 수 있는 범위(설정 이름 → (최소, 최대, 기본, 정수인지)). 화면(app/config/choices.json '목소리_세부')과 같은 값.
+GEN_LIMITS = {
+    "온도": (0.3, 1.0, 0.7, False),
+    "세부_온도": (0.5, 1.1, 0.9, False),
+    "반복_벌점": (1.0, 1.3, 1.05, False),
+    "top_k": (10, 100, 50, True),
+    "문장_쉼_초": (0.0, 1.0, 0.0, False),
+}
+GEN_API = {"temperature": "온도", "sub_temperature": "세부_온도", "repetition_penalty": "반복_벌점", "top_k": "top_k", "gap": "문장_쉼_초"}
+
+
+def gen_check(name, value):
+    """세부 설정 값 하나 검사 → (값, 오류 글|None). 범위를 벗어나면 고쳐 넣지 않고 오류."""
+    lo, hi, _d, whole = GEN_LIMITS[name]
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None, f"{name}: 숫자로 넣어 주세요"
+    x = float(value)
+    if x != x or x < lo - 1e-9 or x > hi + 1e-9:
+        return None, f"{name}: {lo:g}부터 {hi:g}까지만 돼요"
+    if whole:
+        if abs(x - round(x)) > 1e-9:
+            return None, f"{name}: 소수점 없는 숫자로 넣어 주세요"
+        return int(round(x)), None
+    return round(min(hi, max(lo, x)), 3), None
+
+
+def gen_from_cfg(cfg, warn=None):
+    """설정의 목소리 세부 값 → {이름: 값}. 없거나 범위를 벗어난 값은 기본값(한 줄 알림)."""
+    vc = cfg.get("목소리") or {}
+    out = {}
+    for name, (_lo, _hi, default, _w) in GEN_LIMITS.items():
+        v, err = gen_check(name, vc.get(name, default))
+        if err:
+            if warn is not None:
+                warn(f"[설정] 목소리.{err} → 기본값 {default}")
+            v = default
+        out[name] = v
+    return out
 
 
 def _load_voices():
