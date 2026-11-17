@@ -37,7 +37,9 @@
 
 ## 설치
 
-1. [Releases](https://github.com/sinhs0301-prog/kimbiseo/releases/latest) 에서 `KimBiseo-setup-<판>.zip` 을 받습니다.
+1. [Releases](https://github.com/sinhs0301-prog/kimbiseo/releases/latest) 에서 내 그래픽카드에 맞는 설치 파일을 받습니다.
+   엔비디아(RTX·GTX) → `KimBiseo-setup-<판>-NVIDIA.zip` · 라데온·인텔·내장 그래픽·그래픽카드 없음 → `KimBiseo-setup-<판>-Radeon.zip`
+   (내 그래픽카드 확인: 작업 관리자 → 성능 → GPU)
 2. zip 을 오른쪽 클릭 → 속성 → '차단 해제' 체크(있을 때만) → 압축 풀기.
 3. 풀린 폴더의 `설치.bat` 을 두 번 누릅니다. 파란 경고창이 뜨면 '추가 정보' → '실행'.
 4. 설치 창에서 '설치' 를 누르면 끝까지 저절로 합니다(빠른 인터넷에서 15~25분).

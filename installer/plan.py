@@ -51,7 +51,19 @@ GB = 1024 ** 3
 
 # 설치 뒤 크기(대략, 실측 + 여유) — 디스크 여유 검사용
 SIZE_GB = {"python_app": 0.9, "python_voice_cuda": 5.6, "python_voice_cpu": 1.6, "llama_cuda": 1.3, "llama_vulkan": 0.1, "llama_cpu": 0.1,
-           "electron": 0.35, "src": 0.05, "pet_pack": 0.2}
+           "electron": 0.35, "src": 0.05, "pet_pack": 0.2, "llama_tts": 0.1}
+RADEON_MODELS = os.path.join(HERE, "radeon", "models.json")     # 라데온 판만 받는 모델(목소리 GGUF) — models.json 과 따로(엔비디아 판 업데이트에 안 걸리게)
+
+
+def edition_of(given=None):
+    """설치 판: 인자 > installer/edition.json(라데온 판 설치 파일에만 들어 있음) > 'nvidia'."""
+    if given:
+        return str(given).lower()
+    try:
+        with open(os.path.join(HERE, "edition.json"), encoding="utf-8") as f:
+            return str(json.load(f).get("edition") or "nvidia").lower()
+    except (OSError, ValueError):
+        return "nvidia"
 TEMP_GB = 4.5   # 받는 동안 잠깐 쓰는 자리(파이썬 부품 꾸러미·압축 파일 — 끝나면 지움)
 
 
@@ -92,8 +104,9 @@ def other_gpus():
     return [n for n in names if "nvidia" not in n.lower() and not any(w in n.lower() for w in ("basic", "remote", "virtual", "parsec", "meta"))]
 
 
-def make_plan(gpu_list, ram_gb, disk_gb, driver=0.0, others=(), local_brain=False, cli=None, gemma=None):
-    """cli: core/cli_detect.all_status() 결과(None = 구독 두뇌 없음으로 봄) · gemma: 'E4B'(기본)·'E2B'."""
+def make_plan(gpu_list, ram_gb, disk_gb, driver=0.0, others=(), local_brain=False, cli=None, gemma=None, edition="nvidia"):
+    """cli: core/cli_detect.all_status() 결과(None = 구독 두뇌 없음으로 봄) · gemma: 'E4B'(기본)·'E2B'
+    edition: 'nvidia'(기본 — 예전과 같음) | 'radeon'(라데온 판: 엔비디아가 없으면 김비서 목소리를 GGUF 로 — 불칸·CPU)."""
     bm = brain_model(gemma)
     g = max(gpu_list, key=lambda x: x["전체_MiB"]) if gpu_list else None
     mib = g["전체_MiB"] if g else 0
@@ -163,6 +176,21 @@ def make_plan(gpu_list, ram_gb, disk_gb, driver=0.0, others=(), local_brain=Fals
     models = ["whisper-small"] if plan["구성"] == "그래픽카드 없음" else ["whisper-large-v3-turbo"]
     if voice_model:
         models.append("Qwen3-TTS-12Hz-0.6B-Base")
+    plan["판"] = edition if edition in ("nvidia", "radeon") else "nvidia"
+    plan["목소리_gguf"] = False
+    if plan["판"] == "radeon" and not g:
+        plan["목소리_gguf"] = True
+        st.update({"목소리.엔진": "qwen", "목소리.방식": "gguf", "목소리.장치": "auto"})
+        models.append(sysinfo.GGUF_VOICE_MODEL)
+        plan["안내"] = [x for x in plan["안내"] if not x.startswith("엔비디아 그래픽카드가 보이지 않아요")]
+        plan["안내"].insert(0, "라데온 판: 김비서 목소리를 " + (f"그래픽카드({others[0]}, 불칸)" if others else "CPU")
+                          + " 로 해요(안 되면 CPU). 받아쓰기는 작은 귀(whisper-small)를 CPU 로 해요.")
+        plan["판별"].append("목소리: 라데온 판 · 엔비디아 없음 → 김비서 목소리 GGUF(llama.cpp 불칸 → 안 되면 CPU)")
+    elif plan["판"] == "radeon":
+        plan["판별"].append("판: 라데온 판이지만 엔비디아 그래픽카드가 있음 → 엔비디아 판과 같은 구성")
+        plan["안내"].insert(0, "라데온 판 설치 파일이지만 엔비디아 그래픽카드가 보여서 엔비디아 판과 똑같이 설치해요(그대로 쓰면 돼요).")
+    elif not g:
+        plan["안내"].append("라데온·인텔·내장 그래픽 PC 는 라데온 판 설치 파일(이름 끝이 -Radeon.zip)로 깔면 윈도우 음성 대신 김비서 목소리로 말해요.")
     if plan["llama"]:
         models.insert(0, bm)
     plan["모델"] = models
@@ -170,13 +198,14 @@ def make_plan(gpu_list, ram_gb, disk_gb, driver=0.0, others=(), local_brain=Fals
     try:
         sys.path.insert(0, HERE)
         import get_models as GM
-        mf = GM.load_manifest()
+        mf = GM.load_manifests(GM.MANIFEST, RADEON_MODELS)
         model_gb = sum(mf[n]["size_total"] for n in models if n in mf) / GB
     except Exception:  # noqa: BLE001
         model_gb = 0.0
     need = (SIZE_GB["python_app"] + SIZE_GB["python_voice_cuda" if plan["torch"] == "cu128" else "python_voice_cpu"] + SIZE_GB["electron"]
             + SIZE_GB["src"] + SIZE_GB["pet_pack"] + model_gb
-            + (SIZE_GB["llama_cuda"] if plan["llama"].startswith("cuda") else SIZE_GB["llama_vulkan"] if plan["llama"] else 0))
+            + (SIZE_GB["llama_cuda"] if plan["llama"].startswith("cuda") else SIZE_GB["llama_vulkan"] if plan["llama"] else 0)
+            + (SIZE_GB["llama_tts"] if plan["목소리_gguf"] else 0))
     plan["설치_크기_GB"] = round(need, 1)
     plan["필요_디스크_GB"] = round(need + TEMP_GB, 1)
     if disk_gb is not None and disk_gb < plan["필요_디스크_GB"]:
@@ -190,7 +219,7 @@ def make_plan(gpu_list, ram_gb, disk_gb, driver=0.0, others=(), local_brain=Fals
     return plan
 
 
-def detect(prefix, local_brain=False, cli=True, gemma=None):
+def detect(prefix, local_brain=False, cli=True, gemma=None, edition=None):
     """cli=True 면 구독 두뇌(claude·codex) 로그인을 살핌. False 면 안 봄(Gemma 만 다시 설치할 때)."""
     gl = sysinfo.gpus()
     ram = sysinfo.ram_gb()
@@ -202,7 +231,7 @@ def detect(prefix, local_brain=False, cli=True, gemma=None):
     drv = nvidia_driver() if gl else 0.0
     others = other_gpus() if not gl else []
     st = cli_detect.all_status(fresh=True) if cli else None
-    return make_plan(gl, ram, disk, drv, others, local_brain, st, gemma)
+    return make_plan(gl, ram, disk, drv, others, local_brain, st, gemma, edition_of(edition))
 
 
 def main():
@@ -211,12 +240,13 @@ def main():
     ap.add_argument("--local-brain", action="store_true")
     ap.add_argument("--gemma", default=None, help="E4B(기본) | E2B")
     ap.add_argument("--json", action="store_true")
+    ap.add_argument("--edition", default=None, help="nvidia | radeon (비우면 installer/edition.json)")
     a = ap.parse_args()
-    p = detect(a.prefix, a.local_brain, gemma=a.gemma)
+    p = detect(a.prefix, a.local_brain, gemma=a.gemma, edition=a.edition)
     if a.json:
         print(json.dumps(p, ensure_ascii=False, indent=1))
     else:
-        print(f"구성: {p['구성']} · torch {p['torch']} · 두뇌 프로그램 {p['llama'] or '(안 받음)'} · 모델 {', '.join(p['모델'])}")
+        print(f"판: {p['판']} · 구성: {p['구성']} · torch {p['torch']} · 두뇌 프로그램 {p['llama'] or '(안 받음)'} · 모델 {', '.join(p['모델'])}")
         print(f"설치 크기 약 {p['설치_크기_GB']}GB · 필요 디스크 {p['필요_디스크_GB']}GB")
         for x in p["안내"] + p["경고"]:
             print(" -", x)

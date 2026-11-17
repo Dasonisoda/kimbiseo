@@ -1,0 +1,175 @@
+{
+ "schema": "kimbiseo-models/1",
+ "note": "라데온 판만 받는 모델(목소리 GGUF). models.json 과 따로 둠 — 엔비디아 판 업데이트(updater DEPS)에 걸리지 않게. 원 모델 Qwen/Qwen3-TTS-12Hz-0.6B-Base(Apache-2.0)를 HaujetZhao/Qwen3-TTS-GGUF(MIT, 74feb581bc8c) 도구로 GGUF·ONNX 로 바꾼 것. 올리는 곳 = github.com/sinhs0301-prog/kimbiseo 릴리스 첨부(태그 = revision). 바뀌면 sha256 도 같이 바꿈.",
+ "models": [
+  {
+   "name": "Qwen3-TTS-12Hz-0.6B-Base-GGUF",
+   "role": "목소리(김비서 음성 복제 · 라데온 판 GGUF — llama.cpp 불칸/CPU)",
+   "required": true,
+   "license": "Apache-2.0",
+   "source": "https://huggingface.co/Qwen/Qwen3-TTS-12Hz-0.6B-Base (변환: HaujetZhao/Qwen3-TTS-GGUF, MIT)",
+   "revision": "voice-gguf-2026.11.17",
+   "base_url": "https://github.com/sinhs0301-prog/kimbiseo/releases/download/{revision}/",
+   "size_total": 1648266269,
+   "files": [
+    {
+     "path": "qwen3_tts_talker.q5_k.gguf",
+     "asset": "qwen3_tts_talker.q5_k.gguf",
+     "size": 315663616,
+     "sha256": "3a622ac72337bed5e480cb23a86c425c21f7fad6181bf92b5da9c8603296e466"
+    },
+    {
+     "path": "qwen3_tts_predictor.q8_0.gguf",
+     "asset": "qwen3_tts_predictor.q8_0.gguf",
+     "size": 151124320,
+     "sha256": "29a57ee7d1b69443dedd161b09b73d9218023fefd833d6888c17200f83995dea"
+    },
+    {
+     "path": "qwen3_tts_decoder.fp32.onnx",
+     "asset": "qwen3_tts_decoder.fp32.onnx",
+     "size": 2019918,
+     "sha256": "40a8f52cef840e8610f5fc8ed293fee7cc301eceec44afeaf74f6a9ebbfdaae8"
+    },
+    {
+     "path": "qwen3_tts_decoder.fp32.onnx.data",
+     "asset": "qwen3_tts_decoder.fp32.onnx.data",
+     "size": 456243968,
+     "sha256": "fc2b9681b7b64ab07fc97387d58d0fad178b0c0c83804b9d4852f8c05a3a9f12"
+    },
+    {
+     "path": "qwen3_tts_codec_encoder.fp32.onnx",
+     "asset": "qwen3_tts_codec_encoder.fp32.onnx",
+     "size": 2154600,
+     "sha256": "0a4dbcf5013986fb8e69025ffbfdb91598d294c99365791942a80b32afefbe2f"
+    },
+    {
+     "path": "qwen3_tts_codec_encoder.fp32.onnx.data",
+     "asset": "qwen3_tts_codec_encoder.fp32.onnx.data",
+     "size": 224149760,
+     "sha256": "8a3decc3410b17dcf6267b60074091e29da02413d37bd506b67a9606b36318d7"
+    },
+    {
+     "path": "qwen3_tts_speaker_encoder.fp32.onnx",
+     "asset": "qwen3_tts_speaker_encoder.fp32.onnx",
+     "size": 494997,
+     "sha256": "3bbbbe8bc625f3a58b05b2a7572ea0afe4b14fc232a03c7474b26eb3bd949da2"
+    },
+    {
+     "path": "qwen3_tts_speaker_encoder.fp32.onnx.data",
+     "asset": "qwen3_tts_speaker_encoder.fp32.onnx.data",
+     "size": 35411968,
+     "sha256": "fb94bf9fab257525e637faa90bbb5ded377c4aad950a4b06e989924da26e5d8d"
+    },
+    {
+     "path": "tokenizer.json",
+     "asset": "tokenizer.json",
+     "size": 11423986,
+     "sha256": "09267689b8362020b9763b65dd5be7e086b31e28d72e02837a9e781de9a91bc7"
+    },
+    {
+     "path": "embeddings/text_embedding_projected.npy",
+     "asset": "embeddings__text_embedding_projected.npy",
+     "size": 311165056,
+     "sha256": "ddb55ce9453b3fa365b8a4eaa56622df8af08437d57019993325a2e3ad3bb23d"
+    },
+    {
+     "path": "embeddings/codec_embedding_0.npy",
+     "asset": "embeddings__codec_embedding_0.npy",
+     "size": 12583040,
+     "sha256": "47fa9e30f98b1528fc9b332d314f22a32fa33e187509a4d3537f8b2c31199e39"
+    },
+    {
+     "path": "embeddings/codec_embedding_1.npy",
+     "asset": "embeddings__codec_embedding_1.npy",
+     "size": 8388736,
+     "sha256": "2cf4b5d6f6fca977657bc82634eea275cd072036a6a16484febd41b5445abff1"
+    },
+    {
+     "path": "embeddings/codec_embedding_2.npy",
+     "asset": "embeddings__codec_embedding_2.npy",
+     "size": 8388736,
+     "sha256": "c8655ecd642f17d04a85ea37c2665205a8666843925227b25dc8c8bceb8015f5"
+    },
+    {
+     "path": "embeddings/codec_embedding_3.npy",
+     "asset": "embeddings__codec_embedding_3.npy",
+     "size": 8388736,
+     "sha256": "5436624853b3091bc1b88cf37a4d60af46346c508237d72e597bed561a5b2138"
+    },
+    {
+     "path": "embeddings/codec_embedding_4.npy",
+     "asset": "embeddings__codec_embedding_4.npy",
+     "size": 8388736,
+     "sha256": "1041b78ea5158c96cda4aae45bd21707a6fe8c92e6831715075d70d7b5b8e77a"
+    },
+    {
+     "path": "embeddings/codec_embedding_5.npy",
+     "asset": "embeddings__codec_embedding_5.npy",
+     "size": 8388736,
+     "sha256": "17af8770454ab26ca82f092d0d5a634680e4d14412d327fb8b6f94a57b256800"
+    },
+    {
+     "path": "embeddings/codec_embedding_6.npy",
+     "asset": "embeddings__codec_embedding_6.npy",
+     "size": 8388736,
+     "sha256": "b9abbf163b50ba0207e2196772c67b2e1025cf7f4fbe378c6a44123869253ad9"
+    },
+    {
+     "path": "embeddings/codec_embedding_7.npy",
+     "asset": "embeddings__codec_embedding_7.npy",
+     "size": 8388736,
+     "sha256": "1fb06414cb7d4edcd73142e79cbb4bd46f918517e5812b73345ade9535c6eafb"
+    },
+    {
+     "path": "embeddings/codec_embedding_8.npy",
+     "asset": "embeddings__codec_embedding_8.npy",
+     "size": 8388736,
+     "sha256": "08b8d7bd125d75ffa42f515153e66ade42cb16c2eea6ebe1935a2ac2509cbad0"
+    },
+    {
+     "path": "embeddings/codec_embedding_9.npy",
+     "asset": "embeddings__codec_embedding_9.npy",
+     "size": 8388736,
+     "sha256": "a2cf331bb3e2f2c0d44c91c55af045b9c975199331e4566a373b883ce04e9964"
+    },
+    {
+     "path": "embeddings/codec_embedding_10.npy",
+     "asset": "embeddings__codec_embedding_10.npy",
+     "size": 8388736,
+     "sha256": "389422edef8c0b6dbf6cdb48359a0274b11984c04668c004810866784dab2942"
+    },
+    {
+     "path": "embeddings/codec_embedding_11.npy",
+     "asset": "embeddings__codec_embedding_11.npy",
+     "size": 8388736,
+     "sha256": "bf17275629b464a4a38826beeb79b99e0e58cc02c530da2e572b9b7d9972fb2d"
+    },
+    {
+     "path": "embeddings/codec_embedding_12.npy",
+     "asset": "embeddings__codec_embedding_12.npy",
+     "size": 8388736,
+     "sha256": "dee4af40f34626a4951fba2b894120c8cf8293024ae068d1f2579f356c6e2284"
+    },
+    {
+     "path": "embeddings/codec_embedding_13.npy",
+     "asset": "embeddings__codec_embedding_13.npy",
+     "size": 8388736,
+     "sha256": "e307b70fbaddc6e7e48259b4e8c9417f24b155be9281205f38bbf40c64359951"
+    },
+    {
+     "path": "embeddings/codec_embedding_14.npy",
+     "asset": "embeddings__codec_embedding_14.npy",
+     "size": 8388736,
+     "sha256": "cc15bfc4290be77523f8f14c78b9b1710042b5d078291ee87038dfb7ecb3f185"
+    },
+    {
+     "path": "embeddings/codec_embedding_15.npy",
+     "asset": "embeddings__codec_embedding_15.npy",
+     "size": 8388736,
+     "sha256": "aa0de98365775e1cb968514595ff7e23936bea21c2bda6e5bab7e7052cdf97ba"
+    }
+   ],
+   "note": "원 모델 Apache-2.0 → GGUF/ONNX 변환본. 라데온 판 설치 때만 받음. 첨부 이름은 폴더 구분 '/' 대신 '__'."
+  }
+ ]
+}

@@ -1,5 +1,7 @@
 # 설치 파일(zip 하나) 만들기 — 개발자 도구(설치 파일 안에는 안 들어감)
-#   python tools/make_setup_zip.py --out <폴더> [--guide 설치방법.txt]
+#   python tools/make_setup_zip.py --out <폴더> [--guide 설치방법.txt] [--edition radeon]
+#   --edition radeon: 같은 파일 + installer/editions/radeon.json 을 installer/edition.json 으로 넣은 '라데온 판'(이름 끝 -radeon).
+#     라데온 판 설치는 엔비디아가 없으면 김비서 목소리를 GGUF(llama.cpp 불칸·CPU)로 받음(installer/plan.py · radeon/*.json).
 #   허용 목록(tools/allowlist.json)에 적힌 파일 중 설치에 필요한 것만, sha256 이 목록과 맞을 때만 넣음.
 #   tests·tools·android·docs 는 넣지 않음. 모델·파이썬·펫 옷은 설치할 때 받으므로 넣지 않음.
 #   같은 파일이면 같은 zip(시각·순서 고정) → sha256 이 매번 같음.
@@ -30,6 +32,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", required=True)
     ap.add_argument("--guide", default="", help="zip 맨 위에 같이 넣을 설치 안내 글(.txt)")
+    ap.add_argument("--edition", default="", help="비우면 엔비디아 판(예전과 같음) | radeon")
+    ap.add_argument("--label", default="", help="파일 이름 끝 표시(예: NVIDIA · Radeon). 비우면 판 이름(엔비디아 판은 없음)")
     a = ap.parse_args()
     al = json.load(open(os.path.join(ROOT, "tools", "allowlist.json"), encoding="utf-8"))
     pick = []
@@ -44,8 +48,15 @@ def main():
                 print(f"멈춤: sha256 이 허용 목록과 다름 — {p}")
                 return 1
             pick.append((p, full))
+    if a.edition:
+        ed = os.path.join(ROOT, "installer", "editions", f"{a.edition}.json")
+        if not os.path.isfile(ed) or not any(p == f"installer/editions/{a.edition}.json" for p, _ in pick):
+            print(f"멈춤: 판 표시 파일이 없거나 허용 목록에 없음 — installer/editions/{a.edition}.json")
+            return 1
+        pick.append(("installer/edition.json", ed))
     pick.sort()
-    top = f"KimBiseo-setup-{VERSION}"
+    tag = a.label or a.edition
+    top = f"KimBiseo-setup-{VERSION}" + (f"-{tag}" if tag else "")
     os.makedirs(a.out, exist_ok=True)
     out = os.path.join(a.out, f"{top}.zip")
     tmp = out + ".tmp"

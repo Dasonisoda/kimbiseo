@@ -452,6 +452,15 @@ class Installer:
         self.state = self._load_state()
         self.plan = None
         self.bm = PLAN.brain_model(getattr(a, "gemma", None))   # 받을 Gemma 판(models.json 이름)
+        # 판: --edition > installer/edition.json(라데온 판 설치 파일) > 지난 설치 기록 > nvidia
+        self.edition = PLAN.edition_of(getattr(a, "edition", None) or (None if os.path.isfile(os.path.join(HERE, "edition.json"))
+                                                                       else self.state.get("edition")))
+        self.rrt = {}
+        try:
+            with open(os.path.join(HERE, "radeon", "runtimes.json"), encoding="utf-8") as f:
+                self.rrt = json.load(f)
+        except (OSError, ValueError):
+            pass
         self.skipped = {}          # 실패했지만 넘어간 단계(OPTIONAL) → {단계: 주의 내용}
 
     def _load_state(self):
@@ -510,7 +519,7 @@ class Installer:
         again = bool((cur.get("처음설정") or {}).get("끝"))
         uses_local = again and str((cur.get("두뇌") or {}).get("방식") or "local") == "local"
         # 이미 '내 PC(Gemma)'로 쓰는 사람의 업데이트는 두뇌를 바꾸지 않음(구독 로그인이 있어도) — 바꾸는 건 설정에서
-        self.plan = PLAN.detect(self.P, self.a.local_brain or uses_local, cli=not uses_local, gemma=self.a.gemma)
+        self.plan = PLAN.detect(self.P, self.a.local_brain or uses_local, cli=not uses_local, gemma=self.a.gemma, edition=self.edition)
         p = self.plan
         if uses_local:
             p["판별"].append("두뇌: 이미 '내 PC(Gemma)'로 쓰는 중 → 업데이트에서 바꾸지 않음")
@@ -532,8 +541,11 @@ class Installer:
         if p.get("디스크_모자람"):
             raise Fail(f"디스크 공간이 모자라요. 약 {p['필요_디스크_GB']}GB 가 필요한데 {p['디스크_여유_GB']}GB 남았어요. "
                        "공간을 비우거나 다른 드라이브에 설치해 주세요.")
-        self.state["plan"] = {k: p[k] for k in ("구성", "torch", "llama", "모델", "설정")}
-        return p["구성"] + (" · 두뇌 = " + self.st.d["구성"]["두뇌"])
+        self.state["plan"] = {k: p[k] for k in ("구성", "torch", "llama", "모델", "설정", "판", "목소리_gguf")}
+        self.state["edition"] = p["판"]
+        self.st.d["구성"]["판"] = "라데온 판" if p["판"] == "radeon" else "엔비디아 판"
+        return (("라데온 판 · " if p["판"] == "radeon" else "") + p["구성"] + (" · 두뇌 = " + self.st.d["구성"]["두뇌"])
+                + (" · 목소리 = 김비서 목소리(GGUF)" if p.get("목소리_gguf") else ""))
 
     # ---- 2. 프로그램 파일
     def do_files(self):
@@ -724,9 +736,43 @@ class Installer:
         self.st.say("파이썬 부품을 받아서 설치해요(본체 → 음성). 엔비디아 그래픽카드가 있으면 약 3GB 를 받아요.")
         r1 = self.install_env("본체", self.path("runtime", "python-app"), "app.json",
                               "import pipecat, fastapi, uvicorn, webview, aiortc, av, onnxruntime, anthropic, openai", (0.0, 0.3))
-        r2 = self.install_env("음성", self.path("runtime", "python-voice"), voice_lock,
-                              "import torch, torchaudio, transformers, qwen_tts, soundfile, librosa", (0.3, 1.0))
-        return "됨", f"본체 {r1} · 음성 {r2}({'엔비디아' if p['torch'] == 'cu128' else 'CPU'} 판)"
+        gg = bool(p.get("목소리_gguf"))
+        probe = "import torch, torchaudio, transformers, qwen_tts, soundfile, librosa" + (", onnxruntime, tokenizers, scipy" if gg else "")
+        r2 = self.install_env("음성", self.path("runtime", "python-voice"), voice_lock, probe, (0.3, 0.9 if gg else 1.0))
+        r3 = ""
+        if gg:
+            r3 = " · 목소리 실행 파일 " + self.install_tts_runtime((0.9, 1.0))
+        return "됨", f"본체 {r1} · 음성 {r2}({'엔비디아' if p['torch'] == 'cu128' else 'CPU'} 판){r3}"
+
+    def install_tts_runtime(self, frac=(0.0, 1.0)):
+        """라데온 판 목소리용 llama.cpp(b10621 불칸 — CPU 백엔드도 들어 있음)를 runtime/llama-tts 에. 두뇌(runtime/llama)와 따로."""
+        import fnmatch
+        t = (self.rrt or {}).get("llama_cpp_tts")
+        if not t:
+            raise Fail("라데온 판 목록(installer/radeon/runtimes.json)이 없어요. 설치 파일을 다시 받아 주세요.")
+        dest = self.path("runtime", "llama-tts")
+        mark = os.path.join(dest, "kimbiseo_llama_tts.txt")
+        tag = f"{t['version']} {t['sha256'][:12]}"
+        if os.path.isfile(os.path.join(dest, "llama.dll")) and os.path.isfile(mark) and open(mark, encoding="utf-8").read().strip() == tag:
+            return f"이미 설치됨({t['version']})"
+        if self.dry:
+            self.fetch.get(t["url"], t["file"], t["sha256"], t["size"], t["file"])
+            return f"[시험] {t['version']} 주소 확인"
+        z = self.fetch.get(t["url"], os.path.join(self.dl, t["file"]), t["sha256"], t["size"], t["file"], (frac[0], frac[0] + (frac[1] - frac[0]) * 0.8))
+        rmtree(dest)
+        os.makedirs(dest, exist_ok=True)
+        keep = t.get("keep") or ["*"]
+        with zipfile.ZipFile(z) as zf:
+            for n in zf.namelist():
+                base = n.replace("\\", "/").rsplit("/", 1)[-1]
+                if base and any(fnmatch.fnmatch(base.lower(), k.lower()) for k in keep):
+                    with zf.open(n) as src_, open(os.path.join(dest, base), "wb") as out:
+                        shutil.copyfileobj(src_, out)
+        if not os.path.isfile(os.path.join(dest, "llama.dll")):
+            raise Fail("목소리 실행 파일을 풀었는데 llama.dll 이 없어요.", ", ".join(os.listdir(dest))[:300])
+        with open(mark, "w", encoding="utf-8") as f:
+            f.write(tag)
+        return t["version"]
 
     # ---- 4. 두뇌 프로그램
     def do_brain(self):
@@ -761,7 +807,7 @@ class Installer:
     # ---- 5. 모델
     def do_models(self):
         names = self.state["plan"]["모델"]
-        mf = GM.load_manifest(os.path.join(HERE, "models.json"))
+        mf = GM.load_manifests(os.path.join(HERE, "models.json"), PLAN.RADEON_MODELS)
         root = self.path("models")
         total = sum(mf[n]["size_total"] for n in names)
         base = 0
@@ -770,7 +816,7 @@ class Installer:
             for n in names:
                 m = mf[n]
                 for f in m["files"]:
-                    url = GM.base_url(m) + __import__("urllib.parse").parse.quote(f["path"])
+                    url = GM.file_url(m, f)
                     self.fetch.get(url, f["path"], f.get("sha256") or "0" * 64, f["size"], f"{n}/{f['path']}")
             return "됨", f"[시험] {len(names)}개 · {human(total)} 주소 확인"
         for n in names:
@@ -1167,6 +1213,7 @@ def main():
     ap.add_argument("--reg-key", default="KimBiseo")
     ap.add_argument("--display-name", default="김비서")
     ap.add_argument("--packs-catalog", default=None)
+    ap.add_argument("--edition", default=None, help="nvidia | radeon (비우면 installer/edition.json → 지난 설치 기록 → nvidia)")
     ap.add_argument("--no-shortcuts", action="store_true")
     ap.add_argument("--no-register", action="store_true")
     ap.add_argument("--dry-run", action="store_true", help="시험: 받기·설치 없이 차례만(받을 주소는 크기만 물어 확인)")

@@ -1,0 +1,19 @@
+{
+ "schema": "kimbiseo-radeon-runtimes/1",
+ "note": "라데온 판만 쓰는 실행 파일. runtimes.json 과 따로 둠(엔비디아 판의 앱 안 업데이트가 '새 설치 필요'로 바뀌지 않게). llama.cpp 판은 voice/gguf_tts/lib.py 의 구조체 배치(b10621)와 같아야 함 — 판을 올리면 lib.py 도 같이 확인.",
+ "llama_cpp_tts": {
+  "version": "b10621",
+  "license": "MIT",
+  "source": "https://github.com/ggml-org/llama.cpp/releases/tag/b10621",
+  "file": "llama-b10621-bin-win-vulkan-x64.zip",
+  "size": 34403304,
+  "sha256": "2672d85bf87c8280d94dee01eb6a86280046878f70a07d786a93637fa9081163",
+  "url": "https://github.com/ggml-org/llama.cpp/releases/download/b10621/llama-b10621-bin-win-vulkan-x64.zip",
+  "keep": [
+   "ggml*.dll",
+   "llama.dll",
+   "libomp.dll",
+   "LICENSE*"
+  ]
+ }
+}

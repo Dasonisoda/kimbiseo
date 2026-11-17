@@ -249,7 +249,7 @@ def ensure_voice(name):
             STATE["voice_fallback"] = {"voice": name, "fallback": fallback, "reason": reason}
             log(reason)
             return None
-        from tts_engine import load_refs
+        load_refs = _emod().load_refs
         t0 = time.perf_counter()
         folder = voice_folder(name)
         eng.add_voice(name, load_refs(folder), folder)
@@ -260,19 +260,78 @@ def ensure_voice(name):
 
 
 def vram_info():
+    # torch 는 cuda 로 돌 때만 불러옴 — GGUF(llama.cpp) 를 올린 뒤 torch 를 불러오면 OpenMP 가 부딪혀 프로세스가 죽음(2026-11-17 실측)
+    if not (STATE["device"] and str(STATE["device"]).startswith("cuda")):
+        return None
     try:
         import torch
-        if STATE["device"] and str(STATE["device"]).startswith("cuda"):
-            mb = 1024 * 1024
-            return dict(allocated_mib=round(torch.cuda.memory_allocated() / mb, 1), reserved_mib=round(torch.cuda.memory_reserved() / mb, 1),
-                        max_allocated_mib=round(torch.cuda.max_memory_allocated() / mb, 1))
+        mb = 1024 * 1024
+        return dict(allocated_mib=round(torch.cuda.memory_allocated() / mb, 1), reserved_mib=round(torch.cuda.memory_reserved() / mb, 1),
+                    max_allocated_mib=round(torch.cuda.max_memory_allocated() / mb, 1))
     except Exception:  # noqa: BLE001
         pass
     return None
 
 
 # ---------------- 엔진 ----------------
+def _emod():
+    """지금 엔진의 모듈(감정 이름·참고목록 읽기) — GGUF 면 torch 를 불러오지 않게."""
+    if STATE.get("dtype") == "gguf":
+        import gguf_engine
+        return gguf_engine
+    import tts_engine
+    return tts_engine
+
+
+def _has_nvidia():
+    """엔비디아 그래픽카드가 있는지 — torch 를 불러오지 않고 nvidia-smi 로(GGUF 를 쓸 PC 에서 torch 를 먼저 올리지 않게)."""
+    return C.gpu_free_mib()[1] > 0
+
+
+def voice_method(cfg):
+    """'목소리.방식' → torch | gguf. auto: 엔비디아(CUDA)면 torch, 아니면 GGUF 가 깔려 있으면 gguf, 둘 다 아니면 torch(→ 예전 규칙)."""
+    m = str(cfg["목소리"].get("방식") or "auto").lower()
+    if m in ("torch", "gguf"):
+        return m
+    if os.environ.get("KIMBISEO_FORCE_VRAM_LOW") != "1" and _has_nvidia():
+        return "torch"
+    return "gguf" if C.gguf_ready(cfg) else "torch"
+
+
+def load_gguf(cfg, device, threads):
+    """라데온 판 목소리: llama.cpp(불칸 → CPU) + 코덱 ONNX(CPU). torch 를 쓰지 않음."""
+    from gguf_engine import GgufVoice, load_refs
+    model, lib_dir = C.gguf_paths(cfg)
+    if not model or not os.path.isdir(model):
+        raise FileNotFoundError(f"목소리 모델(GGUF) 폴더 없음 — 라데온 판 설치로 받으세요: {os.path.basename(model)}")
+    folder = voice_folder(STATE["default_voice"])
+    if not folder or not os.path.isfile(os.path.join(folder, "참고목록.json")):
+        raise FileNotFoundError("참고음성 없음 — 설정 '목소리.참고음성_폴더' 에 참고목록.json 이 든 폴더를 적어 주세요")
+    vk = str(cfg["목소리"].get("불칸_장치") or "").strip()
+    if vk:
+        os.environ["GGML_VK_VISIBLE_DEVICES"] = vk
+    want = str(device or "auto").lower()
+    want = "cpu" if want.startswith("cpu") else ("vulkan" if want in ("vulkan", "gpu") else "auto")
+    refs = load_refs(folder)
+    g = gen_now()
+    link_root = os.path.join(C.path(cfg, "캐시"), "gguf_links")
+    kw = dict(refs=refs, lib_dir=lib_dir, threads=cfg["목소리"].get("GGUF_스레드") or None, log=log, link_root=link_root,
+              temperature=g["온도"], sub_temperature=g["세부_온도"], repetition_penalty=g["반복_벌점"], top_k=g["top_k"])
+    try:
+        eng = GgufVoice(model, folder, device=want, **kw)
+    except Exception as ex:  # noqa: BLE001  — 그래픽 장치 쪽 오류면 CPU 로 한 번 더
+        if want == "cpu":
+            raise
+        log(f"GGUF 그래픽 장치로 못 띄움 → CPU 로 다시: {type(ex).__name__}: {ex}")
+        eng = GgufVoice(model, folder, device="cpu", **kw)
+    dev = "gguf-" + eng.dev       # 'cpu' 로 시작하지 않게 → 'CPU 면 윈도우 음성' 규칙은 torch CPU 에만
+    STATE.update(engine=eng, engine_name="qwen", judge=None, device=dev, dtype="gguf", gguf_note=eng.device_note)
+    return eng
+
+
 def load_qwen(cfg, device, threads):
+    if voice_method(cfg) == "gguf":
+        return load_gguf(cfg, device, threads)
     import torch
     from tts_engine import QwenVoice, load_refs
     model = C.model_path(cfg, cfg["목소리"].get("모델"))
@@ -334,10 +393,11 @@ def switch_to_windows(reason):
     del old
     try:
         import gc
-        import torch
         gc.collect()
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
+        if "torch" in sys.modules:          # GGUF 엔진이면 torch 를 새로 불러오지 않음(OpenMP 충돌)
+            torch = sys.modules["torch"]
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
     except Exception:  # noqa: BLE001
         pass
     return eng
@@ -442,7 +502,7 @@ def synth(read_sentences, emotion, seed=None, check=True, voice=None, speed=1.0)
 
 
 def prepare(body):
-    from tts_engine import emotion_name
+    emotion_name = _emod().emotion_name
     text = body.get("text")
     if not isinstance(text, str) or not text.strip():
         raise ValueError("text 가 비었습니다")
@@ -865,6 +925,7 @@ def warm_phrases():
     if not os.path.exists(PHRASES):
         return
     n = 0
+    began = time.time()          # GGUF: 켠 뒤 첫 10초는 미리 만들기를 쉼(앱의 첫 인사가 기다리지 않게)
     for ln in open(PHRASES, encoding="utf-8-sig"):
         ln = ln.strip()
         if not ln or ln.startswith("#") or "\t" not in ln:
@@ -874,6 +935,10 @@ def warm_phrases():
             _, sents, emo, _, _ = prepare({"text": text, "emotion": emo})
         except ValueError:
             continue
+        if STATE.get("dtype") == "gguf":
+            # GGUF(라데온 판)는 한 문장 만드는 데 몇 초 걸림 → 사용자 요청이 기다리지 않게, 요청이 없고 조용할 때만 하나씩
+            while STATE["waiting"] > 0 or STATE["busy"] or time.time() - max(STATE["last_use"], began) < 10.0:
+                time.sleep(0.5)
         with GEN_LOCK:
             STATE["busy"] = True
             try:

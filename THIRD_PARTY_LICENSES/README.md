@@ -13,6 +13,7 @@
 | pip · setuptools | 26.2.2 · 84.2.1 | MIT | PyPI | 설치 때 꾸러미 깔기 |
 | llama.cpp (llama-server) | b12283 | MIT | github.com/ggml-org/llama.cpp 릴리스 | '이 PC(Gemma)' 두뇌일 때만 |
 | CUDA 실행 라이브러리(cudart-llama) | b12283 과 같이 | NVIDIA CUDA 라이선스(재배포 조건은 NVIDIA EULA) | llama.cpp 릴리스 | 엔비디아 PC 의 Gemma 두뇌 |
+| llama.cpp (목소리용 DLL — ggml·llama·libomp) | b10621 | MIT | github.com/ggml-org/llama.cpp 릴리스(`installer/radeon/runtimes.json`, sha256 고정) | 라데온 판의 김비서 목소리(GGUF) |
 | Electron | 45.2.3 | MIT (+ Chromium 등 고지 LICENSES.chromium.html 그대로) | github.com/electron/electron 릴리스 | 펫 창 |
 | 클로드 코드 · Codex | 사용자가 설치한 판 | 각 회사 약관(Anthropic · OpenAI) | 사용자가 직접 설치 | 구독 두뇌를 고를 때만 — 김비서는 설치하지 않음 |
 
@@ -26,6 +27,7 @@
 | Whisper large-v3-turbo | MIT | huggingface.co/openai/whisper-large-v3-turbo | 받아쓰기(그래픽카드) |
 | Whisper small | Apache-2.0 (모델 카드 표시) | huggingface.co/openai/whisper-small | 받아쓰기(그래픽카드 없음) |
 | Qwen3-TTS-12Hz-0.6B-Base | Apache-2.0 | huggingface.co/Qwen/Qwen3-TTS-12Hz-0.6B-Base | 김비서 목소리 |
+| Qwen3-TTS-12Hz-0.6B-Base GGUF·ONNX 변환본 (라데온 판) | Apache-2.0 (원 모델과 같음 · 변환 = 형식 바꾸기·양자화만, 고지 NOTICE 같이 올림) | 원 모델 huggingface.co/Qwen/Qwen3-TTS-12Hz-0.6B-Base 를 변환 도구 HaujetZhao/Qwen3-TTS-GGUF(MIT)로 바꿔 **김비서 저장소 릴리스 첨부로 올림**(`installer/radeon/models.json`, sha256 고정) — 위 '다시 나눠 주지 않음'의 예외(공식 변환본이 없어서) | 라데온 판 김비서 목소리 |
 | TitaNet small (sherpa-onnx 변환판) | sherpa-onnx = Apache-2.0 · 원 모델(NVIDIA NeMo TitaNet) 조건은 NVIDIA 표시를 따름 | github.com/k2-fsa/sherpa-onnx 릴리스(자산 고정·sha256) | 목소리 닮음 검사(기본 꺼짐) |
 | 윈도우 기본 음성(SAPI) | 윈도우 라이선스 | 윈도우에 들어 있음 | 예비 목소리 |
 
@@ -181,3 +183,7 @@
 | websockets | 17.3 | BSD-3-Clause | app |
 | win32_setctime | 1.2.0 | MIT license | app |
 | yarl | 1.25.1 | Apache-2.0 | app |
+
+## 소스에 옮겨 넣은 코드
+
+- `voice/gguf_tts/` — HaujetZhao/Qwen3-TTS-GGUF (MIT, 커밋 74feb581bc8c) 의 `qwen3_tts_gguf/inference` 일부를 옮겨 고침. 원문 저작권 고지 = `voice/gguf_tts/LICENSE`.

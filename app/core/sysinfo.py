@@ -94,11 +94,26 @@ def voice_rule(g):
     return "windows", f"{g['이름']} 그래픽 메모리 {gb:.1f}GB < 기준 {QWEN_MIN_MIB / 1024:.0f}GB → 윈도우 기본 음성"
 
 
-def recommend(gpu_list, cli=None, gemma_ready=None):
+GGUF_VOICE_MODEL = "Qwen3-TTS-12Hz-0.6B-Base-GGUF"   # 라데온 판 목소리(installer/radeon/models.json)
+
+
+def gguf_voice_ready(model_dir):
+    """라데온 판 목소리(GGUF 모델 + llama.cpp 불칸 실행 파일)가 깔려 있는지. model_dir = '경로.모델'(<설치폴더>/models)."""
+    if not model_dir:
+        return False
+    m = os.path.join(model_dir, GGUF_VOICE_MODEL, "qwen3_tts_talker.q5_k.gguf")
+    d = os.path.join(os.path.dirname(os.path.abspath(model_dir)), "runtime", "llama-tts", "llama.dll" if os.name == "nt" else "libllama.so")
+    return os.path.isfile(m) and os.path.isfile(d)
+
+
+def recommend(gpu_list, cli=None, gemma_ready=None, gguf_ready=False):
     """→ {"구성": 이름, "설정": {경로: 값}, "안내": [글], "목소리_경고": 글|"", "판별": [글]}
-    cli: core/cli_detect.all_status() 결과(없으면 구독 두뇌 안 봄) · gemma_ready: 이 PC 에 Gemma 가 설치돼 있는지(None = 모름)."""
+    cli: core/cli_detect.all_status() 결과(없으면 구독 두뇌 안 봄) · gemma_ready: 이 PC 에 Gemma 가 설치돼 있는지(None = 모름)
+    gguf_ready: 라데온 판 목소리(GGUF)가 깔려 있으면 엔비디아가 없어도 김비서 목소리를 권함."""
     g = max(gpu_list, key=lambda x: x["전체_MiB"]) if gpu_list else None
     eng, why = voice_rule(g)
+    if g is None and gguf_ready:
+        eng, why = "qwen", "엔비디아 그래픽카드 없음 · 라데온 판 목소리(GGUF, 불칸/CPU) 설치됨 → 김비서 목소리"
     sub = ""
     if cli:
         from . import cli_detect
@@ -108,6 +123,13 @@ def recommend(gpu_list, cli=None, gemma_ready=None):
         judge.append(f"구독 두뇌 로그인됨 → 두뇌 = {'클로드 코드' if sub == 'claude_cli' else 'GPT(Codex)'}(Gemma 는 안 받음)")
     if g is None:
         brain = sub or ("local" if gemma_ready else "url")
+        if gguf_ready:
+            return {"구성": "그래픽카드 없음",
+                    "설정": {"목소리.엔진": "qwen", "귀.장치": "cpu", "목소리.장치": "auto", "두뇌.방식": brain},
+                    "안내": ["엔비디아 그래픽카드가 보이지 않아요.", "목소리는 라데온 판 김비서 목소리(불칸·CPU), 받아쓰기는 CPU 로 해요.",
+                             "두뇌는 구독 클로드·GPT 또는 '내 AI 주소'를 추천해요. 내 PC 에서도 되지만 아주 느려요." if not sub
+                             else "두뇌는 이 PC 에 로그인된 구독을 써요."],
+                    "목소리_경고": "", "판별": judge}
         return {"구성": "그래픽카드 없음",
                 "설정": {"목소리.엔진": eng, "귀.장치": "cpu", "목소리.장치": "cpu", "두뇌.방식": brain},
                 "안내": ["엔비디아 그래픽카드가 보이지 않아요.", "목소리는 윈도우 기본 음성, 받아쓰기는 CPU 로 해요(느릴 수 있어요).",
@@ -135,5 +157,6 @@ def recommend(gpu_list, cli=None, gemma_ready=None):
 
 def report(model_dir, cli=None, gemma_ready=None):
     gl = gpus()
+    gg = gguf_voice_ready(model_dir)
     return {"그래픽카드": gl, "메모리_GB": ram_gb(), "디스크_여유_GB": disk_free_gb(model_dir),
-            "추천": recommend(gl, cli, gemma_ready), "구독": cli}
+            "추천": recommend(gl, cli, gemma_ready, gg), "구독": cli, "라데온판_목소리": gg}

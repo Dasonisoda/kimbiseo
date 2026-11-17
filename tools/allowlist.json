@@ -43,7 +43,7 @@
       "path": "README.md",
       "origin": "new",
       "treatment": "new",
-      "sha256": "cc0f677cae3e52b01129fcba4174a2a63c21a779e07af6b9007cf8d0508ffe8f",
+      "sha256": "9d37c131883bdd18b17cfe13846cf9d839cf207c077bc4e6922201c6c6229eac",
       "exceptions": [
         {
           "line": 6,
@@ -62,7 +62,7 @@
       "path": "THIRD_PARTY_LICENSES/README.md",
       "origin": "new",
       "treatment": "new",
-      "sha256": "6bc73e3b20fa344be5ba43c536d8ee4f5e58d2bb7e9f472855453162b8c2ed17"
+      "sha256": "94f1298c9ae061913321d67d98245cf394206cfe3396b0e2967e708444cbdb56"
     },
     {
       "path": "android/README.md",
@@ -244,7 +244,7 @@
       "path": "app/core/sysinfo.py",
       "origin": "new",
       "treatment": "new",
-      "sha256": "ec40b05c401237740b6cd0a8095b8ee6ac02c88fdfd9679dbb9466cc25dbebe9",
+      "sha256": "05ac94ab16537389d6b818b936bc17976212df109885fcb829a7d80776cd88ee",
       "note": "사양 보기(그래픽카드·메모리·디스크)와 구성 추천 — 5단계"
     },
     {
@@ -494,7 +494,7 @@
       "path": "app/version.py",
       "origin": "new",
       "treatment": "new",
-      "sha256": "005fe894e83fddd9976143ff14b100423c560e4a431cee8d24226fa5b9c25f37",
+      "sha256": "dd2c93dc29518d8ab1d9704873c942fcf03572ca21dcdc4531d59dfa7c51bcd2",
       "note": "판 번호 한 곳 — 9단계"
     },
     {
@@ -579,10 +579,16 @@
       "sha256": "516f436f15e3ee667bfdddeac2ec983db0b1568810048bd19bc9f20134477aab"
     },
     {
+      "path": "installer/editions/radeon.json",
+      "origin": "new",
+      "treatment": "new",
+      "sha256": "09255d5ea98999b4d8c899b0b32f14a7f32c5e75dbb29d4ad4fb5fb3c7740c29"
+    },
+    {
       "path": "installer/get_models.py",
       "origin": "new",
       "treatment": "new",
-      "sha256": "0c41dee2ff2a925bc3f855ea6f9f3013860a6fc400354ce3a74a515a183a527f",
+      "sha256": "56611c15fa4bb869da453cf731dd478b53e8adcc938719ffdba301af4435c6dd",
       "note": "모델 받기·확인(이어받기·다시 시도·진행·확인 기록) — 7단계"
     },
     {
@@ -682,8 +688,29 @@
       "path": "installer/plan.py",
       "origin": "new",
       "treatment": "new",
-      "sha256": "120b3c079b57edc8ca9e544e51ed6901ba0b7949a231e6a2f6fa8f563a025307",
+      "sha256": "31aeb959572f2af7a7b04dbe9fddf2df2724430873ced363a10848425fde389c",
       "note": "사양별 자동 구성 — 7단계"
+    },
+    {
+      "path": "installer/radeon/models.json",
+      "origin": "new",
+      "treatment": "new",
+      "sha256": "54ef533154ea5e60c83f7a3b18f8ba16a118b672de92d9105f76a8608e174ff7",
+      "json_hash_keys": [
+        "sha256"
+      ],
+      "note": "라데온 판 목소리 GGUF 모델 묶음 해시(김비서 릴리스 첨부) — 21단계"
+    },
+    {
+      "path": "installer/radeon/runtimes.json",
+      "origin": "new",
+      "treatment": "new",
+      "sha256": "c2280a3ffb66eb605279a2ce8492c492a56389e0cc1415b1706deacf22be9e00",
+      "json_hash_keys": [
+        "sha256",
+        "url"
+      ],
+      "note": "라데온 판 목소리용 공식 llama.cpp b10621 불칸 판·해시 — 21단계"
     },
     {
       "path": "installer/requirements/app.txt",
@@ -716,7 +743,7 @@
       "path": "installer/setup_core.py",
       "origin": "new",
       "treatment": "new",
-      "sha256": "8479d27009946df9f96aff0c4de2b1143611696cbb94bab1b2af198de38e24af",
+      "sha256": "7116e75335eaeb335f5e869ce36ad74b2078dd7877bbc4ae0c67cbf3e1b96089",
       "note": "설치 본체(부품·두뇌·모델·펫·아이콘·설정, 있으면 건너뜀) — 7단계"
     },
     {
@@ -1026,6 +1053,12 @@
       "sha256": "3554516a6818406241ff07e620dce63a393c3a98b067bab6fb7c6c27378a0408"
     },
     {
+      "path": "tests/unit/test_radeon.py",
+      "origin": "new",
+      "treatment": "new",
+      "sha256": "74c466d89e40e758a1951e27ab3578d27291c6e5c8226b0cd21137ac5ebb2619"
+    },
+    {
       "path": "tests/unit/test_settings.py",
       "origin": "new",
       "treatment": "new",
@@ -1118,7 +1151,7 @@
       "path": "tools/make_setup_zip.py",
       "origin": "new",
       "treatment": "new",
-      "sha256": "cdf2e5bcb2c57c3e2c377ebbd6d174860dbdb3a7286b12d65efa5d2229ba44ef",
+      "sha256": "19315b39e7f64f2e87757fe067a5dd30d66a68286c69f498ad14590e362687eb",
       "note": "설치 파일 zip 만들기(허용 목록·sha256 맞는 것만, 개발자 도구) — 7단계"
     },
     {
@@ -1158,7 +1191,7 @@
       "path": "voice/config.py",
       "origin": "new",
       "treatment": "new",
-      "sha256": "caad2a868de90a985ebfdd49939e57f49bd3249cdca01cae19b58f16bdca9ce8",
+      "sha256": "ac5d249bca6193066e028f93041655d7d986c2b3b81df9a17e50dab614272405",
       "note": "음성 설정 읽기(기본값+사용자 설정)"
     },
     {
@@ -1174,6 +1207,43 @@
       "treatment": "modified",
       "sha256": "8616b44c806e91b65e8bba223b15179a3315c4cf0b91d5f79c9deded8cbd5579",
       "note": "설정 기반·공개 포트 8872·개인 학습 판 길 삭제"
+    },
+    {
+      "path": "voice/gguf_engine.py",
+      "origin": "new",
+      "treatment": "new",
+      "sha256": "734c68726a8b627e325df7f18bcbb0a03315c7b94de0cd96aa91a5162f14c5f3"
+    },
+    {
+      "path": "voice/gguf_tts/LICENSE",
+      "origin": "standard:mit",
+      "treatment": "standard",
+      "sha256": "65959dcac5c2748705a2c38159797ab79193eb657bf2395a5be9b107362e1058",
+      "note": "HaujetZhao/Qwen3-TTS-GGUF MIT 원문(저작권 고지)"
+    },
+    {
+      "path": "voice/gguf_tts/__init__.py",
+      "origin": "derived:HaujetZhao/Qwen3-TTS-GGUF 74feb581bc8c (MIT) 옮겨 고침",
+      "treatment": "modified",
+      "sha256": "a0a970e61da454db28acb03dbf47abd25ed8886960fc46d277df0b70caea03f7"
+    },
+    {
+      "path": "voice/gguf_tts/codec.py",
+      "origin": "derived:HaujetZhao/Qwen3-TTS-GGUF 74feb581bc8c (MIT) 옮겨 고침",
+      "treatment": "modified",
+      "sha256": "597ac228166f80b2b1cd33d90c8abfe21cdf914843012c9b8ba747eb948ddeed"
+    },
+    {
+      "path": "voice/gguf_tts/lib.py",
+      "origin": "derived:HaujetZhao/Qwen3-TTS-GGUF 74feb581bc8c (MIT) 옮겨 고침",
+      "treatment": "modified",
+      "sha256": "b984dea5680924c325e855b359bcab823669f8f4cd7189c3e4e7b3073edcfd71"
+    },
+    {
+      "path": "voice/gguf_tts/parts.py",
+      "origin": "derived:HaujetZhao/Qwen3-TTS-GGUF 74feb581bc8c (MIT) 옮겨 고침",
+      "treatment": "modified",
+      "sha256": "bc5dbb5fcce282feaf31c6e273fe82073a16c7db3150191f1044a9d93a04d9c8"
     },
     {
       "path": "voice/lipsync.py",
@@ -1250,7 +1320,7 @@
       "path": "voice/tts_server.py",
       "origin": "derived:운영판 펫 부품을 고쳐 옮김",
       "treatment": "modified",
-      "sha256": "89ecacc61204b7233c4e1a7a236e18fb04c2e30707f1cf1153d7404d5d69ff26",
+      "sha256": "cca5cd0ffa7c3ab34eededddb06d798ab520b63aef84df72bee37c42c1d8ec69",
       "note": "설정 기반·공개 포트 8871·윈도우 음성 예비"
     },
     {

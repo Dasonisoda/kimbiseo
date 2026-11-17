@@ -46,7 +46,11 @@ DEFAULTS = {
         "엔진": "qwen",            # qwen(김비서 목소리) | windows(윈도우 기본 음성)
         "예비": "windows",         # qwen 을 못 띄우면 이것으로(빈 값이면 예비 없음)
         "모델": "Qwen3-TTS-12Hz-0.6B-Base",
-        "장치": "auto",            # auto | cuda | cpu
+        "장치": "auto",            # auto | cuda | cpu (방식 gguf 일 때: auto=불칸 그래픽 있으면 그것 | cpu)
+        "방식": "auto",            # auto(엔비디아면 torch, 아니면 GGUF 가 깔려 있으면 gguf, 둘 다 아니면 예전대로 윈도우 음성) | torch | gguf
+        "GGUF_모델": "Qwen3-TTS-12Hz-0.6B-Base-GGUF",   # 라데온 판(installer/radeon) 이 받는 모델 폴더 이름
+        "GGUF_실행폴더": "",         # llama.cpp(b10621) DLL 폴더. 비우면 <설치폴더>/runtime/llama-tts
+        "불칸_장치": "",             # 그래픽카드가 여럿일 때 번호(GGML_VK_VISIBLE_DEVICES). 비우면 첫째
         "그래픽메모리_상한_GB": 1.8,
         "CPU_스레드": 8,
         "목소리": "kimbiseo",       # voices.json 의 이름. 사용자 설정에 이 값이 있으면 고정,
@@ -233,6 +237,22 @@ def model_path(cfg, value):
     if os.path.isabs(v):
         return v
     return os.path.join(path(cfg, "모델"), v)
+
+
+def gguf_paths(cfg):
+    """(GGUF 모델 폴더, llama.cpp DLL 폴더) — 라데온 판 목소리."""
+    v = cfg["목소리"]
+    lib_dir = os.path.expandvars(str(v.get("GGUF_실행폴더") or os.environ.get("KIMBISEO_GGUF_LIB") or ""))
+    if not lib_dir:
+        lib_dir = os.path.join(os.path.dirname(REPO), "runtime", "llama-tts")     # <설치폴더>/src/voice → <설치폴더>/runtime
+    return model_path(cfg, v.get("GGUF_모델") or "Qwen3-TTS-12Hz-0.6B-Base-GGUF"), os.path.abspath(lib_dir)
+
+
+def gguf_ready(cfg):
+    """라데온 판 목소리가 깔려 있는지(모델 폴더의 토커 파일 + llama.dll)."""
+    m, d = gguf_paths(cfg)
+    dll = "llama.dll" if os.name == "nt" else "libllama.so"
+    return bool(m) and os.path.isfile(os.path.join(m, "qwen3_tts_talker.q5_k.gguf")) and os.path.isfile(os.path.join(d, dll))
 
 
 def apply_hf_env(cfg):

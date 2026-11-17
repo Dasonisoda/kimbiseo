@@ -517,6 +517,20 @@ def download(url, dest, size=None, tries=None, say=print, progress=None, hosts=N
         raise DownloadError("file", f"{type(ex).__name__}: {ex}", tried) from None
 
 
+def file_url(m, f):
+    """파일 하나의 받을 주소. 'asset' 이 있으면 그 이름(릴리스 첨부처럼 폴더 없는 곳), 없으면 path."""
+    return base_url(m) + urllib.parse.quote(f.get("asset") or f["path"])
+
+
+def load_manifests(*paths):
+    """여러 모델 목록을 하나로(뒤가 앞을 덮음). 없는 파일은 건너뜀 — 라데온 판 목록(installer/radeon/models.json)을 더할 때."""
+    out = {}
+    for p in paths:
+        if p and os.path.isfile(p):
+            out.update(load_manifest(p))
+    return out
+
+
 def ensure_model(m, root, say=print, progress=None, allow_unverified=False):
     """모델 하나를 root\\<이름>\\ 에 받고 확인. 이미 맞는 파일은 건너뜀. → (됨?, [실패한 파일], 받은 바이트)
     progress(이 모델에서 끝난 바이트, 이 모델 전체 바이트, 초당 바이트, 지금 하는 일)"""
@@ -540,7 +554,7 @@ def ensure_model(m, root, say=print, progress=None, allow_unverified=False):
         say(f"  받는 중 {f['path']} ({human(f['size'])})")
         pd = (lambda d, t, r, _base=finished: progress(_base + (d or 0), total, r, "받기")) if progress else None
         try:
-            download(base_url(m) + urllib.parse.quote(f["path"]), dest, f["size"], say=say, progress=pd,
+            download(file_url(m, f), dest, f["size"], say=say, progress=pd,
                      native=bool(f.get("sha256") or f.get("git_sha1")))      # 받은 뒤 해시로 확인하는 파일만 윈도우 내려받기로 대신 받음
         except RuntimeError as ex:
             say(f"  실패 {f['path']}: {ex}")

@@ -1,0 +1,4 @@
+{
+ "edition": "radeon",
+ "note": "라데온 판 설치 파일 표시 — tools/make_setup_zip.py --edition radeon 이 installer/edition.json 으로 넣음"
+}
