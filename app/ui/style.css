@@ -113,6 +113,20 @@ svg { display: block; }
 .notice.ok strong { color: var(--green); } .notice.warn strong { color: var(--amber); } .notice.bad strong { color: var(--red); }
 .notice p { color: var(--muted); font-size: .867rem; }
 .card .notice, .panel .notice, #view-wizard .notice { margin: 8px 0; }
+/* 통역 칸 — 번역은 크게, 원문은 작게, 원화는 노란 한 줄 */
+.notice.interp { border-color: var(--accent-dim); max-height: 60vh; }   /* 통역 칸은 상대에게 보여 주는 화면 — 다른 알림보다 크게 */
+.interp-head { margin-top: 0; }
+.interp-head select { min-height: 36px; background: var(--field); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 0 8px; font: inherit; }
+.interp-head .btn { min-height: 36px; }
+.interp-list { list-style: none; margin: 8px 0 0; padding: 0; }
+.interp-list li { padding: 6px 0; border-top: 1px solid var(--line2); }
+.interp-list li:first-child { border-top: 0; }
+.notice .interp-src { color: var(--muted); font-size: .867rem; }
+.notice .interp-dst { font-size: 1.6rem; line-height: 1.35; color: var(--text); word-break: normal; overflow-wrap: anywhere; margin: 2px 0; }
+.notice .interp-list li:not(:first-child) .interp-dst { font-size: 1.1rem; }   /* 맨 위 = 방금 번역(가장 크게) */
+.notice .interp-krw { color: #FDD663; font-size: 1rem; }
+.interp-btn { min-height: 40px; padding: 0 10px; flex: none; }
+.interp-langs { margin: 8px 0; padding-left: 18px; }
 .update-notes { margin: 4px 0 8px; padding-left: 20px; color: var(--muted); font-size: .867rem; }
 
 /* 단추 — 같은 폭 격자 줄맞춤, 어두운 바탕 */

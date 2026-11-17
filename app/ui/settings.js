@@ -2,7 +2,7 @@
 "use strict";
 const Settings = {
   tab: "name",
-  tabs: [["name", "이름·호칭"], ["pet", "펫"], ["brain", "두뇌"], ["voice", "목소리"], ["mic", "마이크·스피커"], ["talk", "대화"], ["about", "정보"]],
+  tabs: [["name", "이름·호칭"], ["pet", "펫"], ["brain", "두뇌"], ["voice", "목소리"], ["mic", "마이크·스피커"], ["talk", "대화"], ["interp", "통역"], ["about", "정보"]],
 
   async render() {
     await loadSettings().catch(() => {});
@@ -360,6 +360,9 @@ const Settings = {
     s4.append(l1, l2, l3, h("div", {class: "row"}, h("button", {class: "btn", type: "button", text: "기억 보기·지우기", onclick: () => show("memory")})),
       this.saveRow("set-mem-save", () => ({기억: {켜기: i1.checked, 자동: i2.checked, 일기: i3.checked}})));
   },
+
+  // 통역(interp.js)
+  t_interp(card) { Interp.settings(card); },
 
   // 정보
   t_about(card) {

@@ -38,9 +38,10 @@ class EarLink:
         if self.writer is None or self.writer.is_closing():
             self.reader, self.writer = await asyncio.open_connection("127.0.0.1", self.port)
 
-    async def transcribe(self, pcm16: bytes, max_tokens=None, quiet=False):
+    async def transcribe(self, pcm16: bytes, max_tokens=None, quiet=False, langs=None):
         """max_tokens: 받아쓰기 길이 상한(대기 중 이름 확인처럼 짧은 조각이 반복 환각으로 귀를 오래 붙잡지 않게).
-        quiet: 귀 서버가 받아쓴 글을 제 기록에 남기지 않음(대기 중 주변 말)."""
+        quiet: 귀 서버가 받아쓴 글을 제 기록에 남기지 않음(대기 중 주변 말).
+        langs: 통역 중 {"langs":[...], "fixed", "last", "need"} — 그 언어들 안에서 감지해 받아씀(답에 lang·lang_conf·lang_p)."""
         async with self.lock:
             for attempt in range(2):
                 try:
@@ -51,6 +52,8 @@ class EarLink:
                         req["max_tokens"] = int(max_tokens)
                     if quiet:
                         req["quiet"] = True
+                    if langs:
+                        req.update({k: v for k, v in langs.items() if k in ("langs", "fixed", "last", "need")})
                     self.writer.write((json.dumps(req) + "\n").encode())
                     self.writer.write(pcm16)
                     await self.writer.drain()
@@ -62,6 +65,27 @@ class EarLink:
                         raise ConnectionError(r["error"])
                     return r
                 except (OSError, ConnectionError):
+                    self.writer = None
+                    if attempt:
+                        raise
+
+    async def say(self, voice, text):
+        """통역 원어민 목소리(귀 서버가 자식 프로그램에 맡김) → (int16 PCM, 표본율). 실패하면 RuntimeError."""
+        async with self.lock:
+            for attempt in range(2):
+                try:
+                    await self._ensure()
+                    self.n += 1
+                    self.writer.write((json.dumps({"op": "say", "id": self.n, "voice": voice, "text": text}, ensure_ascii=False) + "\n").encode("utf-8"))
+                    await self.writer.drain()
+                    line = await self.reader.readline()
+                    if not line:
+                        raise ConnectionError("귀 서버 연결 끊김")
+                    r = json.loads(line)
+                    if r.get("error"):
+                        raise RuntimeError(r["error"])
+                    return await self.reader.readexactly(int(r["n"])), int(r["sr"])
+                except (OSError, ConnectionError, asyncio.IncompleteReadError):
                     self.writer = None
                     if attempt:
                         raise

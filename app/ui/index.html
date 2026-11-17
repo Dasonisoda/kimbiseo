@@ -45,6 +45,7 @@
   <section class="notice warn" id="update-box" hidden></section>
   <section class="notice warn" id="pending-box" hidden></section>
   <section class="notice warn" id="petrt-box" hidden></section>
+  <section class="notice interp" id="interp-box" aria-live="polite" hidden></section>
 
   <h2 class="sr">대화 내용</h2>
   <ol class="chat" id="chat" aria-live="polite"></ol>
@@ -53,6 +54,7 @@
       <button class="round" id="talk-btn" type="button" title="말로 대화 켜기"><span class="sr" id="talk-label">대화 시작</span>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true">
         <rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg></button>
+      <button class="btn ghost interp-btn" id="interp-btn" type="button" title="통역 켜기(말로: '영어 통역해 줘')">통역</button>
       <label class="sr" for="chat-text">글로 말하기</label>
       <input id="chat-text" type="text" maxlength="500" placeholder="메시지">
       <button class="round" id="chat-send" type="submit" title="보내기 (Enter)"><span class="sr">보내기</span>
@@ -98,6 +100,7 @@
 <script src="/ui/settings.js"></script>
 <script src="/ui/update.js"></script>
 <script src="/ui/petrt.js"></script>
+<script src="/ui/interp.js"></script>
 <script src="/ui/start.js"></script>
 </body>
 </html>

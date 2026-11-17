@@ -1,0 +1,186 @@
+{
+ "schema": "kimbiseo-models/1",
+ "note": "통역 원어민 목소리 모델(선택 — 설정 → 통역 '통역 목소리 받기'를 누를 때만 받음). models.json 과 따로 둠 — 업데이트(updater DEPS)에 걸리지 않게(앱 안 업데이트로 0.1.15 를 받아도 새 설치 없이 통역을 씀). 모두 원 저장소에서 사용자 PC 가 직접 받음(판 고정 + sha256/git_sha1). 상업 OK 만(Kokoro-82M Apache-2.0 · Piper 목소리 학습 자료 CC0/CC-BY-4.0).",
+ "models": [
+  {
+   "name": "kokoro-82m",
+   "role": "통역 원어민 목소리(영어·일본어·중국어·스페인어·프랑스어·이탈리아어) — 선택, '통역 목소리 받기'",
+   "required": false,
+   "group": "interp",
+   "license": "Apache-2.0(모델·목소리 — https://huggingface.co/hexgrad/Kokoro-82M)",
+   "source": "https://huggingface.co/hexgrad/Kokoro-82M",
+   "revision": "f3ff3571791e39611d31c381e3a41a3af07b4987",
+   "base_url": "https://huggingface.co/hexgrad/Kokoro-82M/resolve/{revision}/",
+   "size_total": 330369105,
+   "files": [
+    {
+     "path": "README.md",
+     "size": 6348,
+     "git_sha1": "d6dc124205ad567631d14cd8700f1af77a861c3f"
+    },
+    {
+     "path": "VOICES.md",
+     "size": 7625,
+     "git_sha1": "ed78a806ffa121525449a848624600eae34037c7"
+    },
+    {
+     "path": "config.json",
+     "size": 2351,
+     "git_sha1": "14a726edd3718279eac426630879ff743955b16a"
+    },
+    {
+     "path": "kokoro-v1_0.pth",
+     "size": 327212226,
+     "sha256": "496dba118d1a58f5f3db2efc88dbdc216e0483fc89fe6e47ee1f2c53f18ad1e4"
+    },
+    {
+     "path": "voices/af_heart.pt",
+     "size": 523425,
+     "sha256": "0ab5709b8ffab19bfd849cd11d98f75b60af7733253ad0d67b12382a102cb4ff"
+    },
+    {
+     "path": "voices/ef_dora.pt",
+     "size": 523420,
+     "sha256": "d9d69b0f8a2b87a345f269d89639f89dfbd1a6c9da0c498ae36dd34afcf35530"
+    },
+    {
+     "path": "voices/ff_siwis.pt",
+     "size": 523425,
+     "sha256": "8073bf2d2c4b9543a90f2f0fd2144de4ed157e2d4b79ddeb0d5123066171fbc9"
+    },
+    {
+     "path": "voices/if_sara.pt",
+     "size": 523425,
+     "sha256": "6c0b253b955fe32f1a1a86006aebe83d050ea95afd0e7be15182f087deedbf55"
+    },
+    {
+     "path": "voices/jf_alpha.pt",
+     "size": 523425,
+     "sha256": "1bf4c9dc69e45ee46183b071f4db766349aac5592acbcfeaf051018048a5d787"
+    },
+    {
+     "path": "voices/zf_xiaobei.pt",
+     "size": 523435,
+     "sha256": "9b76be63dab4f4f96962030acc0126a9aee9728608fbbe115e2b58a2bd504df6"
+    }
+   ],
+   "note": "목소리 6개만 받음(af_heart·jf_alpha·zf_xiaobei·ef_dora·ff_siwis·if_sara). 우리가 다시 나눠 주지 않음 — 사용자 PC 가 이 저장소에서 직접 받음."
+  },
+  {
+   "name": "piper-de_DE-thorsten-medium",
+   "role": "통역 원어민 목소리(독일어, Piper) — 선택, '통역 목소리 받기'",
+   "required": false,
+   "group": "interp",
+   "license": "저장소 MIT · 학습 자료는 MODEL_CARD 참조(이 목소리 = CC0 자료로 다시 학습한 판, 2026-11)",
+   "source": "https://huggingface.co/rhasspy/piper-voices/tree/main/de/de_DE/thorsten/medium",
+   "revision": "0ca208afc2a2ee102b1e961e72e0a7e4907be3d0",
+   "base_url": "https://huggingface.co/rhasspy/piper-voices/resolve/{revision}/de/de_DE/thorsten/medium/",
+   "size_total": 63228866,
+   "files": [
+    {
+     "path": "MODEL_CARD",
+     "size": 427,
+     "git_sha1": "9dc1ec0047b089a8529fb9550c9dee8f7397a96f"
+    },
+    {
+     "path": "de_DE-thorsten-medium.onnx",
+     "size": 63221984,
+     "sha256": "fd270eb3d1ebf91d763f8a0f949b1b1bebdfefaea18c3aaf8577dd34536e064f"
+    },
+    {
+     "path": "de_DE-thorsten-medium.onnx.json",
+     "size": 6455,
+     "git_sha1": "b1cb33f3c82ff46c225e760037988d4133f3bfda"
+    }
+   ],
+   "note": "Piper 1.5 이상 필요(재학습판). MODEL_CARD 를 같이 받아 둠(학습 자료 출처)."
+  },
+  {
+   "name": "piper-el_GR-rapunzelina-medium",
+   "role": "통역 원어민 목소리(그리스어, Piper) — 선택, '통역 목소리 받기'",
+   "required": false,
+   "group": "interp",
+   "license": "저장소 MIT · 학습 자료는 MODEL_CARD 참조(이 목소리 = CC0 자료로 다시 학습한 판, 2026-11)",
+   "source": "https://huggingface.co/rhasspy/piper-voices/tree/main/el/el_GR/rapunzelina/medium",
+   "revision": "0ca208afc2a2ee102b1e961e72e0a7e4907be3d0",
+   "base_url": "https://huggingface.co/rhasspy/piper-voices/resolve/{revision}/el/el_GR/rapunzelina/medium/",
+   "size_total": 62955293,
+   "files": [
+    {
+     "path": "MODEL_CARD",
+     "size": 276,
+     "git_sha1": "53ed65d14b906ac81512c365333f795feaf13449"
+    },
+    {
+     "path": "el_GR-rapunzelina-medium.onnx",
+     "size": 62950044,
+     "sha256": "3ca9fb3092215ee92edfc019b43feb0115ff4dfe638eb34474833ab1de840952"
+    },
+    {
+     "path": "el_GR-rapunzelina-medium.onnx.json",
+     "size": 4973,
+     "git_sha1": "1fe5fb36930ebdd5e0a976f241b8373ea3fcbf63"
+    }
+   ],
+   "note": "Piper 1.5 이상 필요(재학습판). MODEL_CARD 를 같이 받아 둠(학습 자료 출처)."
+  },
+  {
+   "name": "piper-ru_RU-denis-medium",
+   "role": "통역 원어민 목소리(러시아어, Piper) — 선택, '통역 목소리 받기'",
+   "required": false,
+   "group": "interp",
+   "license": "저장소 MIT · 학습 자료는 MODEL_CARD 참조(이 목소리 = CC0 자료로 다시 학습한 판, 2026-11)",
+   "source": "https://huggingface.co/rhasspy/piper-voices/tree/main/ru/ru_RU/denis/medium",
+   "revision": "0ca208afc2a2ee102b1e961e72e0a7e4907be3d0",
+   "base_url": "https://huggingface.co/rhasspy/piper-voices/resolve/{revision}/ru/ru_RU/denis/medium/",
+   "size_total": 63228598,
+   "files": [
+    {
+     "path": "MODEL_CARD",
+     "size": 418,
+     "git_sha1": "a97e89d1da2fcbced2e4a42ac49a670a1c19c8a8"
+    },
+    {
+     "path": "ru_RU-denis-medium.onnx",
+     "size": 63221984,
+     "sha256": "879bc365cb14d1380e3f5ed6044162ccf54c99f6161871569b7f830aec3ce841"
+    },
+    {
+     "path": "ru_RU-denis-medium.onnx.json",
+     "size": 6196,
+     "git_sha1": "59da8d82e1416c9b53095278419c410ad2ed324b"
+    }
+   ],
+   "note": "Piper 1.5 이상 필요(재학습판). MODEL_CARD 를 같이 받아 둠(학습 자료 출처)."
+  },
+  {
+   "name": "piper-tr_TR-antalia-medium",
+   "role": "통역 원어민 목소리(터키어, Piper) — 선택, '통역 목소리 받기'",
+   "required": false,
+   "group": "interp",
+   "license": "CC-BY-4.0(모델·자료 — 출처 표시: ozgurguler/piper-tr-antalia-medium, 성우 자료 상업 계약·공개 재배포 동의)",
+   "source": "https://huggingface.co/ozgurguler/piper-tr-antalia-medium",
+   "revision": "22b2a016887632416c2a5fb2de515c3957077e47",
+   "base_url": "https://huggingface.co/ozgurguler/piper-tr-antalia-medium/resolve/{revision}/",
+   "size_total": 63526339,
+   "files": [
+    {
+     "path": "MODEL_CARD.md",
+     "size": 5030,
+     "git_sha1": "512411cfdbfa734d3481d5c23b236c20fe140148"
+    },
+    {
+     "path": "tr_TR-antalia-medium.onnx",
+     "size": 63516050,
+     "sha256": "8da26b23b8855ce9fcd600a8756dc2cbeed6f9014e899d90df637c899e03cdf4"
+    },
+    {
+     "path": "tr_TR-antalia-medium.onnx.json",
+     "size": 5259,
+     "git_sha1": "92ce88743054c47cd38016c5bc6723e47001f141"
+    }
+   ],
+   "note": "CC-BY-4.0 — 설정 화면·THIRD_PARTY_LICENSES 에 출처 표시. MODEL_CARD.md 를 같이 받아 둠."
+  }
+ ]
+}

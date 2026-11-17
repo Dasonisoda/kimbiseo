@@ -16,6 +16,7 @@
 | llama.cpp (목소리용 DLL — ggml·llama·libomp) | b10621 | MIT | github.com/ggml-org/llama.cpp 릴리스(`installer/radeon/runtimes.json`, sha256 고정) | 라데온 판의 김비서 목소리(GGUF) |
 | Electron | 45.2.3 | MIT (+ Chromium 등 고지 LICENSES.chromium.html 그대로) | github.com/electron/electron 릴리스 | 펫 창 |
 | 클로드 코드 · Codex | 사용자가 설치한 판 | 각 회사 약관(Anthropic · OpenAI) | 사용자가 직접 설치 | 구독 두뇌를 고를 때만 — 김비서는 설치하지 않음 |
+| Piper (piper-tts, 통역 목소리 읽기 프로그램) | 1.8.0 | **GPL-3.0** (espeak-ng 포함, GPL-3.0) | PyPI(`installer/locks/interp.json`, sha256 고정) | 통역 원어민 목소리(선택 — 설정 → 통역 '통역 목소리 받기'를 누를 때만 받음) |
 
 ## 모델
 
@@ -30,6 +31,14 @@
 | Qwen3-TTS-12Hz-0.6B-Base GGUF·ONNX 변환본 (라데온 판) | Apache-2.0 (원 모델과 같음 · 변환 = 형식 바꾸기·양자화만, 고지 NOTICE 같이 올림) | 원 모델 huggingface.co/Qwen/Qwen3-TTS-12Hz-0.6B-Base 를 변환 도구 HaujetZhao/Qwen3-TTS-GGUF(MIT)로 바꿔 **김비서 저장소 릴리스 첨부로 올림**(`installer/radeon/models.json`, sha256 고정) — 위 '다시 나눠 주지 않음'의 예외(공식 변환본이 없어서) | 라데온 판 김비서 목소리 |
 | TitaNet small (sherpa-onnx 변환판) | sherpa-onnx = Apache-2.0 · 원 모델(NVIDIA NeMo TitaNet) 조건은 NVIDIA 표시를 따름 | github.com/k2-fsa/sherpa-onnx 릴리스(자산 고정·sha256) | 목소리 닮음 검사(기본 꺼짐) |
 | 윈도우 기본 음성(SAPI) | 윈도우 라이선스 | 윈도우에 들어 있음 | 예비 목소리 |
+| Kokoro-82M (목소리 af_heart·jf_alpha·zf_xiaobei·ef_dora·ff_siwis·if_sara) | Apache-2.0 (모델·목소리) | huggingface.co/hexgrad/Kokoro-82M (판·sha256 = `installer/interp/models.json`) | 통역 원어민 목소리 — 영어·일본어·중국어·스페인어·프랑스어·이탈리아어(선택) |
+| Piper 목소리 de_DE-thorsten-medium | 학습 자료 CC0 (Thorsten-Voice) · 저장소 MIT | huggingface.co/rhasspy/piper-voices (판 고정, MODEL_CARD 같이 받음) | 통역 — 독일어(선택) |
+| Piper 목소리 el_GR-rapunzelina-medium | 학습 자료 CC0 (greek-single-speaker-speech-dataset) · 저장소 MIT | huggingface.co/rhasspy/piper-voices | 통역 — 그리스어(선택) |
+| Piper 목소리 ru_RU-denis-medium | 학습 자료 CC0 (OHF-Voice voice-datasets) · 저장소 MIT | huggingface.co/rhasspy/piper-voices | 통역 — 러시아어(선택) |
+| Piper 목소리 tr_TR-antalia-medium | **CC-BY-4.0** — 출처 표시: "tr_TR-antalia-medium" by ozgurguler (https://huggingface.co/ozgurguler/piper-tr-antalia-medium), 성우 동의 녹음으로 학습한 합성 목소리 | huggingface.co/ozgurguler/piper-tr-antalia-medium | 통역 — 터키어(선택) |
+
+통역 목소리는 모두 **합성(기계) 목소리**입니다. 듣는 사람이 사람 목소리로 오해할 수 있는 곳에서는 합성 목소리라고 알려 주세요(목소리 제작자 요청).
+태국어·인도네시아어·베트남어는 상업용으로 쓸 수 있는 원어민 목소리(모델·학습 자료 둘 다)가 없어 글자로만 보여 줍니다(비영리 조건의 MMS·Piper th 등은 쓰지 않음).
 
 ## 미디어 라이브러리 (LGPL/GPL 주의)
 
@@ -38,6 +47,11 @@
 - **num2words 0.5.14**: LGPL.
 - **soundfile**: 꾸러미는 BSD-3-Clause, 윈도우 wheel 에 든 libsndfile 은 LGPL-2.1.
 - **torch · torchaudio (CUDA 판)**: BSD-3-Clause, CUDA 판 wheel 에 든 NVIDIA 라이브러리는 NVIDIA 라이선스.
+- **통역 목소리 부품(`installer/locks/interp.json`, 따로 깔리는 `runtime\python-interp`)**: piper-tts 1.8.0 = **GPL-3.0**(espeak-ng 포함),
+  phonemizer-fork · espeakng-loader(espeak-ng 자료) = GPL-3.0, kokoro · misaki = Apache-2.0, spacy · en_core_web_sm = MIT, torch(CPU 판) = BSD-3-Clause.
+  이 부품들은 김비서 코드와 한 프로그램으로 묶이지 않습니다 — 귀 서버가 **따로 도는 프로그램**(`voice/interp_voice.py`, 그 런타임의 파이썬)을 켜고
+  표준 입출력으로 글과 소리만 주고받습니다. 김비서는 이 부품을 고치거나 다시 나눠 주지 않고, 사용자 PC 가 PyPI·GitHub(spaCy 모델) 에서 직접 받습니다.
+  GPL 원문·소스 안내는 받은 꾸러미의 `*.dist-info` 에 있습니다(piper 소스: https://github.com/OHF-Voice/piper1-gpl).
 
 ## 파이썬 꾸러미 전체 (`installer/locks/app.json`·`voice-cuda.json` 에 고정된 판, 꾸러미 정보의 라이선스 표시)
 
@@ -183,6 +197,12 @@
 | websockets | 17.3 | BSD-3-Clause | app |
 | win32_setctime | 1.2.0 | MIT license | app |
 | yarl | 1.25.1 | Apache-2.0 | app |
+
+## 통역 환율
+
+- 통역 중 상대 말의 외국 돈을 원화로 바꿀 때 쓰는 환율: **유럽중앙은행 기준환율**(frankfurter.dev — 키 없는 공개 서비스) +
+  거기 없는 통화는 **Rates By Exchange Rate API**(open.er-api.com, 무료 이용 조건 = 출처 표시. 설정 → 통역 '환율' 칸에 표시).
+  통역을 쓸 때 하루 한 번만 받고(요청에 사용자 정보 없음), 자료 폴더 `fx_rates.json` 에 둡니다. 참고용 어림값이에요(실제 환전·카드 환율과 다름).
 
 ## 소스에 옮겨 넣은 코드
 

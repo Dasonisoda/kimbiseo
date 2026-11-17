@@ -10,6 +10,10 @@
 #   python setup_core.py pet-install --prefix … --data … --status <상태 파일> [--file <받아 둔 electron zip>]
 #       펫 실행 틀(Electron)만 다시 설치 — 설치 창의 '펫 다시 받기'·'직접 넣기', 김비서 설정 → 펫 의 같은 단추가 부름.
 #       --file 은 사용자가 브라우저로 직접 받은 압축 파일(크기·sha256 이 목록과 같아야 씀).
+#   python setup_core.py interp-install --prefix … --data … --status <상태 파일>
+#       통역 원어민 목소리(선택) — 김비서 설정 → 통역 '통역 목소리 받기'가 부름. runtime\python-interp(locks/interp.json: Kokoro·Piper, CPU)
+#       + 목소리 모델(installer/interp/models.json — models.json 과 따로(업데이트 DEPS 에 안 걸리게): Kokoro-82M · Piper 독일어·그리스어·러시아어·터키어, 약 640MB). Piper(GPL-3.0)는
+#       사용자 PC 가 PyPI 에서 직접 받아 따로 도는 프로그램(voice/interp_voice.py)에서만 씀 — 우리는 다시 나눠 주지 않음.
 # 0.1.4~ 두뇌: 이 PC 에 클로드 코드·Codex 로그인이 있으면 Gemma 를 받지 않음(plan.py). 업데이트(덮어 설치) 때
 #   이미 있는 Gemma·두뇌 프로그램은 지우지 않고, 설정의 두뇌 경로는 디스크에 실제 있는 파일로 맞춘다.
 #
@@ -807,7 +811,7 @@ class Installer:
     # ---- 5. 모델
     def do_models(self):
         names = self.state["plan"]["모델"]
-        mf = GM.load_manifests(os.path.join(HERE, "models.json"), PLAN.RADEON_MODELS)
+        mf = GM.load_manifests(os.path.join(HERE, "models.json"), PLAN.RADEON_MODELS, self.INTERP_MODELS)
         root = self.path("models")
         total = sum(mf[n]["size_total"] for n in names)
         base = 0
@@ -1160,6 +1164,62 @@ class Installer:
         return 1
 
     # ---- 펫 실행 틀만 다시 설치(설치 창 '펫 다시 받기'·'직접 넣기' · 김비서 설정 → 펫)
+    # ---- 통역 원어민 목소리(선택 부품)
+    INTERP_MODELS = os.path.join(HERE, "interp", "models.json")
+
+    def interp_models(self):
+        mf = GM.load_manifest(self.INTERP_MODELS)
+        return list(mf), mf
+
+    def do_interp_packages(self):
+        r = self.install_env("통역", self.path("runtime", "python-interp"), "interp.json",
+                             "import torch, kokoro, misaki, piper, onnxruntime, soundfile", (0.0, 1.0))
+        return "됨", f"통역 부품 {r}"
+
+    def do_interp_models(self):
+        names, mf = self.interp_models()
+        self.state["plan"] = dict(self.state.get("plan") or {}, 모델=names)
+        total = sum(mf[n]["size_total"] for n in names)
+        free = shutil.disk_usage(self.P).free if os.path.isdir(self.P) else None
+        if free is not None and free < total + 2 * 1024 ** 3:
+            raise Fail(f"디스크 공간이 모자라요. 통역 목소리에 약 {human(total + 2 * 1024 ** 3)} 가 필요한데 {human(free)} 남았어요.")
+        return self.do_models()
+
+    def finish_interp(self):
+        cur = self.current_settings()
+        cur.setdefault("실행", {})["통역_파이썬"] = self.path("runtime", "python-interp", "python.exe")
+        write_json(self.settings_file(), cur)
+        for d in (self.wheels, self.path("install", "pipcache")):
+            rmtree_quiet(d)
+        for f in os.listdir(self.path("install")):
+            if f.startswith("req_"):
+                os.remove(self.path("install", f))
+        return "됨", "설정에 통역 목소리 경로를 적었어요"
+
+    def run_interp(self):
+        os.makedirs(self.path("install"), exist_ok=True)
+        self.st.heartbeat()
+        self.st.log(f"==== 통역 목소리 설치 시작 (김비서 {VERSION})")
+        for sid in ("python", "plan", "files", "brain", "pet"):
+            self.st.end(sid, "건너뜀", "통역 목소리만 설치")
+        for sid, fn in (("packages", self.do_interp_packages), ("models", self.do_interp_models), ("finish", self.finish_interp)):
+            self.st.begin(sid)
+            t0 = time.time()
+            try:
+                r = fn()
+            except Fail as ex:
+                return self.fail(sid, ex.why.replace("'다시 하기'", "'통역 목소리 받기'"), ex.detail)
+            except Exception as ex:  # noqa: BLE001
+                why, detail, info = self.explain(ex)
+                return self.fail(sid, why.replace("'다시 하기'", "'통역 목소리 받기'"), detail, info)
+            state, text = r if isinstance(r, tuple) else ("됨", r or "")
+            self.st.end(sid, state, f"{text} ({time.time() - t0:.0f}초)")
+        self.save_state()
+        self.st.d.update({"끝": True, "성공": True, "지금": "", "글": "통역 목소리를 설치했어요. 다음 통역부터 그 나라 목소리로 읽어요.", "주의": []})
+        self.st.write(force=True)
+        self.st.log("==== 통역 목소리 설치 끝")
+        return 0
+
     def run_pet(self):
         os.makedirs(self.path("install"), exist_ok=True)
         self.st.heartbeat()
@@ -1201,7 +1261,7 @@ class Installer:
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["install", "plan", "gemma-install", "gemma-remove", "pet-install", "pet-help"])
+    ap.add_argument("cmd", choices=["install", "plan", "gemma-install", "gemma-remove", "pet-install", "pet-help", "interp-install"])
     ap.add_argument("--prefix", default=os.path.expandvars(r"%LOCALAPPDATA%\KimBiseo"))
     ap.add_argument("--data", default=os.path.expandvars(r"%APPDATA%\KimBiseo"))
     ap.add_argument("--status", default="")
@@ -1235,7 +1295,8 @@ def main():
         return 0
     if not a.status:
         a.status = os.path.join(a.prefix, "install", "gemma_status.json" if a.cmd.startswith("gemma") else
-                                "pet_status.json" if a.cmd == "pet-install" else "status.json")
+                                "pet_status.json" if a.cmd == "pet-install" else
+                                "interp_status.json" if a.cmd == "interp-install" else "status.json")
     os.makedirs(os.path.dirname(os.path.abspath(a.status)), exist_ok=True)
     if a.cmd == "gemma-remove":
         print(json.dumps(Installer(a).remove_gemma(), ensure_ascii=False))
@@ -1248,6 +1309,10 @@ def main():
         if os.path.isfile(a.status):
             os.remove(a.status)
         return Installer(a).run_pet()
+    if a.cmd == "interp-install":
+        if os.path.isfile(a.status):
+            os.remove(a.status)
+        return Installer(a).run_interp()
     return Installer(a).run()
 
 

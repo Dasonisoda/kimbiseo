@@ -5,8 +5,12 @@
 #   - 말 빠르기(목소리.말속도 1.0/1.2/1.4): 서버가 줄였으면(X-Speed-Applied 1) 그대로, 아니면 여기서 줄임(PyAV 있을 때).
 #   - 목소리: 문장마다 다시 고름(voice_choice.voice_now) — 직접 고른 목소리 > 펫이 지금 입은 옷 > 펫 성별 설정.
 #     펫 옷을 갈아입으면 다음 문장부터 그 옷의 목소리. 서버가 그 이름을 거절하면 기본 목소리로 다시 말함(voice_link).
+#   - 통역 중 외국어 번역문(core/interp.speak_lang)은 김비서 목소리 대신 그 언어 원어민 목소리(귀 서버 say → voice/interp_voice.py).
+#     원어민 목소리가 없는 언어(태국어·인도네시아어·베트남어)이거나 설정 통역.목소리_엔진 = '글자만' 이면 화면 글만.
 import asyncio
 import re
+
+import numpy as np
 
 from loguru import logger
 from pipecat.frames.frames import ErrorFrame, InterruptionFrame, TTSAudioRawFrame
@@ -17,9 +21,9 @@ from pipecat.utils.text.base_text_aggregator import Aggregation, TextType
 from pipecat.utils.text.simple_text_aggregator import SimpleTextAggregator
 
 from .audio_smooth import SeamSmoother
-from . import voice_choice
+from . import interp, voice_choice
 from .filters import foreign_clean, lang_active, mostly_english, tts_clean
-from .voice_link import VoiceLink, speech_rate, text_norm
+from .voice_link import EarLink, VoiceLink, speech_rate, text_norm
 
 SR = 24000
 
@@ -86,6 +90,8 @@ class FirstCommaAggregator(SimpleTextAggregator):
 class VoiceTTS(TTSService):
     def __init__(self, state, voice=None, **kw):
         async def _norm(text, _type):
+            if interp.speak_lang(text):      # 통역 번역문 — 그 언어 글자 그대로(한자·가나·태국 글자를 지우지 않음)
+                return re.sub(r"[*_#`~]+", " ", text).strip()
             if text_norm.has_yawn(text):
                 state.event("yawn", text=text[:60])
             if lang_active(state) and not re.search(r"[가-힣]", text):
@@ -112,6 +118,7 @@ class VoiceTTS(TTSService):
         self._spoken_n = self._blocked_n = 0
         self._noticed = False
         self._voice_said = None
+        self._ear = None
 
     async def _pick_voice(self):
         """이 문장을 말할 목소리 이름. 펫(얼굴 = 펫)이 켜져 있고 목소리를 직접 고르지 않았으면 지금 입은 옷으로."""
@@ -149,8 +156,45 @@ class VoiceTTS(TTSService):
     def can_generate_metrics(self) -> bool:
         return True
 
+    async def _interp_say(self, text, lang, context_id):
+        """통역 번역문을 그 언어 원어민 목소리로. 목소리가 없거나 실패하면 화면 글만(무음 한 조각)."""
+        st = self.state
+        voice = interp.L.voice_of(st.cfg, lang)
+        st.add_spoken(text)
+        if not voice:
+            logger.info(f"통역: {lang} 원어민 목소리 없음 → 화면 글만(글 {len(text)}자)")
+            st.event("interp", state="no_voice", lang=lang)
+            yield self._hush(context_id)
+            return
+        await self.start_tts_usage_metrics(text)
+        if self._ear is None:
+            self._ear = EarLink(st.cfg["포트"]["귀"])
+        try:
+            pcm, sr = await self._ear.say(voice, text)
+        except Exception as ex:  # noqa: BLE001
+            logger.warning(f"통역 원어민 목소리({voice}) 실패: {str(ex)[:160]}")
+            st.event("interp", state="no_voice", lang=lang, why=str(ex)[:160])
+            yield self._hush(context_id)
+            return
+        finally:
+            await self.stop_ttfb_metrics()
+        if sr != SR and pcm:
+            x = np.frombuffer(pcm, "<i2").astype(np.float32)
+            n = int(len(x) * SR / sr)
+            pcm = np.clip(np.interp(np.arange(n) * (sr / SR), np.arange(len(x)), x), -32768, 32767).astype("<i2").tobytes()
+        step = SR * 2 // 5
+        for i in range(0, len(pcm), step):
+            yield TTSAudioRawFrame(audio=pcm[i:i + step], sample_rate=SR, num_channels=1, context_id=context_id)
+        if not pcm:
+            yield self._hush(context_id)
+
     async def run_tts(self, text: str, context_id: str):
         text = text.strip()
+        lang = interp.speak_lang(text)
+        if lang:
+            async for fr in self._interp_say(text, lang, context_id):
+                yield fr
+            return
         if not re.search(r"[0-9A-Za-z가-힣]", text):
             yield self._hush(context_id)
             return
@@ -226,3 +270,5 @@ class VoiceTTS(TTSService):
     async def cleanup(self):
         await super().cleanup()
         await self.mouth.close()
+        if self._ear is not None:
+            await self._ear.close()

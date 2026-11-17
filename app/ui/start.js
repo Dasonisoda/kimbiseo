@@ -51,6 +51,12 @@
     if (await confirmBox("김비서를 끌까요? 펫도 같이 꺼져요.", "네, 끌게요")) a.close();
   };
   document.getElementById("talk-btn").onclick = () => (Talk.on ? (Talk.stop(), fetch("/api/status")) : Talk.start());
+  // 통역 단추: 켜져 있으면 끄고, 꺼져 있으면 켬(말로 대화가 꺼져 있으면 같이 켬 — 마이크로 들어야 통역함)
+  document.getElementById("interp-btn").onclick = async () => {
+    if (Interp.v && Interp.v["켜짐"]) { await Interp.turn(false); return; }
+    await Interp.turn(true);
+    if (!Talk.on) Talk.start();
+  };
   document.getElementById("chat-form").addEventListener("submit", (e) => {
     e.preventDefault();
     const inp = document.getElementById("chat-text");
@@ -68,6 +74,7 @@
   }
   startEvents();
   Update.load();
+  Interp.load();          // 통역이 켜져 있으면(화면을 다시 열었을 때) 통역 칸을 보임
   PetRuntime.load();      // 펫 프로그램이 없으면(설치 때 못 받음) 대화 화면 위에 알림
   setTop("준비됨", "on");
   const first = !get(K.cfg, "처음설정.끝", false) || /[?&]wizard=1\b/.test(location.search);

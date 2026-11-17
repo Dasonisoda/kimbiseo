@@ -23,6 +23,8 @@
 #     POST  /api/client       화면 마이크 처리 결과(getSettings: 메아리 지우기·잡음 줄이기·소리 크기 자동) 기록
 #     POST  /api/pending/clear {"무엇": "목소리"|"귀"}  (실행 관리가 서버를 다시 켠 뒤)
 #     GET   /api/memory       기억 보기(지식·일기)   POST /api/memory/delete {"id"|"day"|"all": true}  기억 지우기
+#     GET   /api/interp       통역 상태(켜짐·상대 언어·최근 번역)   POST /api/interp {"켜기": true|false, "언어": "auto"|코드}
+#     GET   /api/interp/runtime  통역 목소리 부품·모델 받았는지   POST /api/interp/install  '통역 목소리 받기'(설치 프로그램을 따로 띄움)
 #     GET   /api/update       업데이트 상태(지금 판·새 판·받는 중·지난 결과)   POST /api/update/check · /download · /apply · /seen · /page
 #     POST  /api/shutdown     끄기(머리글 X-KimBiseo-Shutdown = 자료 폴더 secrets\shutdown_secret.txt 값)
 #   지키는 것: 127.0.0.1 에서만 듣고, Host·Origin·Content-Type 검사(core/guard). 기억·대화 기록·열쇠는 자료 폴더에만.
@@ -56,7 +58,7 @@ LOOP = None
 UI_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ui")
 UI_EVENTS = {"status", "user", "bot", "typed", "asr", "tool", "wake_mode", "wake", "name_call", "interrupted",
              "brain_error", "speed", "settings_applied", "names", "session", "settings", "client_audio", "echo",
-             "barge", "tool_halt", "conn", "update"}
+             "barge", "tool_halt", "conn", "update", "interp"}
 
 
 def _make_memory():
@@ -718,6 +720,86 @@ def make_app():
         _reload()
         logger.info(f"Gemma 지움: {res.get('지움')} {res.get('돌려준')} 못지움={res.get('못지움')}")
         return {**res, "Gemma": gemma_info()}
+
+    # ---------------------------------------------------------------- 통역(번역만 — 두뇌 대화·도구로 안 넘김) · 원어민 목소리 부품
+    from .core import fx, interp
+    fx.set_dir(C.path(CFG, "자료"))
+    interp_job = {"proc": None}
+    interp_status = os.path.join(C.path(CFG, "로그"), "interp_status.json")
+
+    def interp_runtime():
+        run = CFG.get("실행") or {}
+        py = os.path.expandvars(str(run.get("통역_파이썬") or "")) or os.path.join(prefix, "runtime", "python-interp", "python.exe")
+        root = C.path(CFG, "모델")
+        langs = []
+        for code, info in interp.L.langs(CFG).items():
+            v = str(info.get("목소리") or "")
+            m = interp.L.model_of(v)
+            langs.append({"코드": code, "이름": info.get("이름") or code, "목소리": bool(v),
+                          "받음": bool(m and os.path.isdir(os.path.join(root, m)))})
+        st = {}
+        try:
+            with open(interp_status, encoding="utf-8") as f:
+                st = json.load(f)
+        except (OSError, ValueError):
+            pass
+        p = interp_job["proc"]
+        return {"부품": os.path.isfile(py), "언어": langs, "엔진": str((CFG.get("통역") or {}).get("목소리_엔진") or "원어민"),
+                "설치중": bool(p is not None and p.poll() is None), "기록폴더": C.path(CFG, "로그"),
+                "진행": {k: st.get(k) for k in ("끝", "성공", "전체", "글", "오류")} if st else None}
+
+    @app.get("/api/interp")
+    async def interp_get(after: int = 0):
+        return {"ok": True, **interp.view(CFG), "최근": interp.recent(after), "켜기_가능": interp.enabled(CFG)}
+
+    @app.post("/api/interp")
+    async def interp_post(request: Request):
+        try:
+            b = await request.json()
+        except ValueError:
+            b = {}
+        b = b if isinstance(b, dict) else {}
+        on = b.get("켜기")
+        lang = str(b.get("언어") or "").strip()
+        if on is False:
+            interp.turn_off("화면 단추")
+            broadcast({"type": "interp", "state": "off", **interp.view(CFG)})
+            return {"ok": True, **interp.view(CFG)}
+        if not interp.enabled(CFG):
+            return JSONResponse({"ok": False, "오류": "설정에서 통역이 꺼져 있어요"}, status_code=400)
+        if lang and lang != "auto" and lang not in interp.L.langs(CFG):
+            return JSONResponse({"ok": False, "오류": "모르는 언어예요"}, status_code=400)
+        if on is True or not interp.active(CFG):
+            interp.turn_on(CFG, lang or "auto")
+        if lang:
+            interp.set_mode(CFG, lang)
+        interp.warm_voice(CFG)
+        broadcast({"type": "interp", "state": "on", **interp.view(CFG)})
+        return {"ok": True, **interp.view(CFG)}
+
+    @app.get("/api/interp/runtime")
+    async def interp_runtime_get():
+        info = interp_runtime()
+        if info["진행"] and info["진행"].get("끝") and info["진행"].get("성공") and not (CFG.get("실행") or {}).get("통역_파이썬"):
+            _reload()          # 설치 프로그램이 적은 통역 목소리 경로를 읽어 둠
+            info = interp_runtime()
+        return {"ok": True, **info}
+
+    @app.post("/api/interp/install")
+    async def interp_install():
+        p = interp_job["proc"]
+        if p is not None and p.poll() is None:
+            return {"ok": True, "이미": True}
+        try:
+            os.remove(interp_status)
+        except OSError:
+            pass
+        sp = __import__("subprocess")
+        interp_job["proc"] = sp.Popen([sys.executable.replace("pythonw.exe", "python.exe"), "-B", "-X", "utf8", setup_py, "interp-install",
+                                       "--prefix", prefix, "--data", C.path(CFG, "자료"), "--status", interp_status],
+                                      cwd=os.path.dirname(setup_py), creationflags=getattr(sp, "CREATE_NO_WINDOW", 0))
+        logger.info(f"통역 목소리 설치 시작 PID {interp_job['proc'].pid}")
+        return {"ok": True, "PID": interp_job["proc"].pid}
 
     # ---------------------------------------------------------------- 펫 프로그램(실행 틀)만 다시 설치 — 설치 때 '펫' 단계를 못 받았을 때
     pet_job = {"proc": None}

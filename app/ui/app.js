@@ -214,6 +214,7 @@ function onEvent(ev) {
   if (t === "names") { setName(ev.name); return; }
   if (t === "settings") { loadSettings().catch(() => {}); return; }
   if (t === "update") { Update.onEvent(ev); return; }
+  if (t === "interp") { Interp.onEvent(ev); return; }
   if (t === "conn" && !ev.on && Talk.on) { Talk.stop("대화가 끝났어요."); }
 }
 

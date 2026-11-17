@@ -1,0 +1,20 @@
+# 통역 원어민 목소리 환경(선택 부품 — 설정 화면 '통역 목소리 받기'를 눌렀을 때만 runtime\python-interp 에 깖)
+# 설치는 locks/interp.json 대로(정확한 판 + sha256, make_lock.py --torch cpu 로 만듦). 그래픽카드를 쓰지 않음(CPU, 문장 하나 0.5~2초).
+#   Kokoro-82M 엔진(영어·일본어·중국어·스페인어·프랑스어·이탈리아어) = kokoro + misaki (Apache-2.0)
+#   Piper 엔진(독일어·그리스어·러시아어·터키어) = piper-tts 1.8 (★GPL-3.0, espeak-ng 포함 — 사용자 PC 가 PyPI 에서 직접 받고,
+#     김비서와는 따로 도는 프로그램(voice/interp_voice.py 자식 프로세스, 표준 입출력)으로만 씀. 김비서는 이 꾸러미를 다시 나눠 주지 않음)
+#   일본어 읽기 = pyopenjtalk-plus(미리 빌드판 — misaki[ja] 가 끌고 오는 pyopenjtalk 는 윈도우에서 빌드 실패) + fugashi·unidic-lite·jaconv·mojimoji
+#   영어 읽기 = spaCy en_core_web_sm(MIT, 공식 github 릴리스 wheel)
+torch==2.11.0
+kokoro==0.9.4
+misaki[en,zh]==0.9.4
+pyopenjtalk-plus==0.4.1.post10
+fugashi==1.5.2
+unidic-lite==1.0.8
+jaconv==0.5.0
+mojimoji==0.0.13
+# en_core_web_sm: sha256 은 locks/interp.json 에 고정(받을 때 그 값으로 확인)
+en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl
+piper-tts==1.8.0
+soundfile==0.14.0
+numpy==2.4.6

@@ -23,7 +23,8 @@ def norm_text(s):
         s = text_norm.normalize(s or "")
     except Exception:  # noqa: BLE001
         s = s or ""
-    return re.sub(r"[^0-9A-Za-z가-힣]", "", s).lower()
+    # 통역(0.1.15~): 태국·그리스·키릴·베트남 성조 글자·가나·한자도 남김 — 원어민 목소리 메아리를 알아보고, 외국어 말이 '빈 말'로 버려지지 않게
+    return re.sub(r"[^0-9A-Za-z가-힣\u00C0-\u024F\u0370-\u03FF\u0400-\u04FF\u0E00-\u0E7F\u1E00-\u1EFF\u3040-\u30FF\u4E00-\u9FFF]", "", s).lower()
 
 
 def approx_substring_similarity(t, ref):

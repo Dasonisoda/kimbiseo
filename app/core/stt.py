@@ -7,6 +7,8 @@
 #     짧게(최대 '귀.이름부르기_최대토큰') 조용히 받아써 이름을 불렀는지만 본다. 부르지 않은 말은 메모리에만 잠깐(주변기억_초) 두고
 #     기록·화면에 남기지 않는다. 1분에 짧은 조각 30번·긴 조각 12번까지만 귀를 부른다(대기 중 그래픽카드 아끼기).
 #     이름만 부르면('김비서!') 두뇌를 거치지 않고 '비서.부름_대답' 을 말하고 이어듣기를 연다.
+#   - 통역 모드(core/interp.py): "태국어 통역해 줘"로 켜면 그 뒤의 말은 '한국어 + 통역 언어' 안에서 감지해 받아쓰고 번역만 한다
+#     (두뇌 대화·도구·기억으로 넘기지 않음 — 다른 사람 말로 김비서를 조작하지 못하게). 이름 부르기 문도 거치지 않음.
 import asyncio
 import time
 
@@ -26,6 +28,7 @@ from pipecat.transcriptions.language import Language
 from pipecat.utils.time import time_now_iso8601
 
 from . import config as C
+from . import interp
 from .state import approx_substring_similarity, apply_fixes, is_hallucination, is_repeat_junk, norm_text
 from .turns import confirm_barge
 from .voice_link import EarLink
@@ -138,9 +141,13 @@ class EarSTT(SegmentedSTTService):
             return "pass", sim
         return "pass", 0.0
 
+    def _interp_on(self):
+        return interp.enabled(self.cfg) and interp.active(self.cfg)
+
     async def _peek(self, utt, pcm):
         try:
-            r = await self.ear.transcribe(pcm, quiet=self.state.wake)
+            r = await self.ear.transcribe(pcm, quiet=self.state.wake,
+                                          langs=interp.ear_args(self.cfg) if self._interp_on() else None)
         except Exception as ex:  # noqa: BLE001
             logger.warning(f"엿듣기 실패: {ex}")
             return
@@ -200,6 +207,10 @@ class EarSTT(SegmentedSTTService):
             meta = {"echo_window": self.state.in_echo_window(t_start),
                     "bot_speaking": self.state.bot_spoke_between(t_start, now), "t_stop": now, "t_start": t_start}
         st = self.state
+        if self._interp_on():
+            async for f in self._interp_turn(audio, meta):
+                yield f
+            return
         standby = st.wake and not st.in_follow(meta.get("t_start"))
         await self.start_processing_metrics()
         try:
@@ -280,7 +291,77 @@ class EarSTT(SegmentedSTTService):
             if amb:
                 text = (f"[주변 대화(최근 {int(st.ambient_keep // 60)}분, 참고용 — 사용자가 비서에게 한 말이 아님): {amb}]\n"
                         + text)
+        cmd = interp.L.parse_command(self.cfg, text) if interp.enabled(self.cfg) else None
+        if cmd and cmd[0] == "on":   # "태국어 통역해 줘" → 통역 모드(두뇌로 안 넘김)
+            code = interp.turn_on(self.cfg, cmd[1])
+            interp.warm_voice(self.cfg, code)
+            nm = interp.L.name_of(self.cfg, code)
+            st.event("user", text=text)
+            st.event("interp", state="on", **interp.view(self.cfg))
+            yield TTSSpeakFrame(f"네, 지금부터 {nm} 통역할게요. 한국어로 말씀하시면 {nm}로, 상대가 말하면 한국어로 옮겨 드려요. "
+                                "끝내실 땐 통역 그만, 이라고 해 주세요.", append_to_context=False)
+            return
         yield TranscriptionFrame(text=text, user_id="", timestamp=time_now_iso8601(), language=Language.KO, finalized=True)
+
+    async def _interp_turn(self, audio, meta):
+        """통역 모드 한 마디: 감지한 언어로 받아씀 → 번역(도구·대화 기록 없는 번역 전용 요청) → 그 언어 목소리로 말함(tts.py).
+        한국어 '통역 그만'·화면 '끄기'로 끔. 다른 사람 말은 절대 두뇌 대화·도구로 넘기지 않는다(번역만)."""
+        st, cfg = self.state, self.cfg
+        await self.start_processing_metrics()
+        try:
+            r = await self.ear.transcribe(audio, langs=interp.ear_args(cfg))
+        except Exception as ex:  # noqa: BLE001
+            yield ErrorFrame(error=f"귀 서버 오류: {ex}")
+            return
+        await self.stop_processing_metrics()
+        text = (r.get("text") or "").strip()
+        asr_ms = round(r.get("sec", 0) * 1000)
+        if not text or is_repeat_junk(text, r.get("audio_sec")):
+            st.event("unduck")
+            return
+        verdict, sim = self._judge(text, meta)
+        if meta.get("bot_speaking"):
+            t1 = meta["t_stop"]
+            dur = max(0.0, t1 - meta["t_start"])
+            corr, active = st.echo_corr(t1 - max(0.8, min(3.0, dur)), t1)
+            verdict = self._combine(text, verdict, corr, active)
+        if verdict in ("echo", "noise"):
+            if verdict == "echo":
+                st.event("echo", text=text, sim=round(sim, 2))
+            st.event("unduck")
+            return
+        src = r.get("lang") or "ko"
+        st.last_asr_t = time.time()
+        st.event("asr", text=text, verdict="interp", lang=src, asr_ms=asr_ms, audio_sec=round(r.get("audio_sec", 0), 2))
+        cmd = interp.L.parse_command(cfg, text) if src == "ko" else None
+        if cmd and cmd[0] == "off":
+            interp.turn_off("말로 끔")
+            st.event("user", text=text)
+            st.event("interp", state="off", **interp.view(cfg))
+            yield TTSSpeakFrame("네, 통역 마칠게요.", append_to_context=False)
+            return
+        if cmd and cmd[0] == "on":
+            code = interp.turn_on(cfg, cmd[1])
+            interp.warm_voice(cfg, code)
+            st.event("user", text=text)
+            st.event("interp", state="on", **interp.view(cfg))
+            yield TTSSpeakFrame(f"네, {interp.L.name_of(cfg, code)}로 바꿀게요.", append_to_context=False)
+            return
+        interp.touch()
+        dst = interp.plan(cfg, src)
+        sn, dn = interp.L.name_of(cfg, src), interp.L.name_of(cfg, dst)
+        st.event("interp", state="translating", src_lang=src, dst_lang=dst, src=text, src_name=sn, dst_name=dn)
+        out, who, sec = await interp.translate(cfg, text, src, dst, interp.history())
+        if not out:
+            logger.warning(f"통역 실패 {src}→{dst}: {who} ({sec:.1f}초)")
+            st.event("interp", state="error", src_lang=src, dst_lang=dst, src=text, why=who)
+            yield TTSSpeakFrame("번역이 안 됐어요. 한 번 더 말씀해 주세요.", append_to_context=False)
+            return
+        item = interp.remember(text, out, src, dst)
+        logger.info(f"통역 {src}→{dst} ({who} {sec:.2f}초, 감지 {src} {r.get('lang_conf')}, 원문 {len(text)}자 → {len(out)}자)")
+        st.event("interp", state="done", src_lang=src, dst_lang=dst, src=text, dst=item["dst"], money=item.get("money"),
+                 src_name=sn, dst_name=dn, sec=round(sec, 2), asr_ms=asr_ms, voice=bool(interp.L.voice_of(cfg, dst)) or dst == "ko")
+        yield TTSSpeakFrame(out, append_to_context=False)
 
     async def cleanup(self):
         await super().cleanup()
