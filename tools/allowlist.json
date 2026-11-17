@@ -695,7 +695,7 @@
       "path": "installer/radeon/models.json",
       "origin": "new",
       "treatment": "new",
-      "sha256": "54ef533154ea5e60c83f7a3b18f8ba16a118b672de92d9105f76a8608e174ff7",
+      "sha256": "8f84f36ea61d2b788e2ad67bced1529b806f7c70e45defe5a3e2fb148072f99f",
       "json_hash_keys": [
         "sha256"
       ],

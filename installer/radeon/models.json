@@ -10,7 +10,7 @@
    "source": "https://huggingface.co/Qwen/Qwen3-TTS-12Hz-0.6B-Base (변환: HaujetZhao/Qwen3-TTS-GGUF, MIT)",
    "revision": "voice-gguf-2026.11.17",
    "base_url": "https://github.com/sinhs0301-prog/kimbiseo/releases/download/{revision}/",
-   "size_total": 1648266269,
+   "size_total": 1644062272,
    "files": [
     {
      "path": "qwen3_tts_talker.q5_k.gguf",
@@ -27,8 +27,8 @@
     {
      "path": "qwen3_tts_decoder.fp32.onnx",
      "asset": "qwen3_tts_decoder.fp32.onnx",
-     "size": 2019918,
-     "sha256": "40a8f52cef840e8610f5fc8ed293fee7cc301eceec44afeaf74f6a9ebbfdaae8"
+     "size": 163992,
+     "sha256": "73a21cdaefe372426f96b5d79122d6b3a02bb669ac065f20d1479d2aa1d189ea"
     },
     {
      "path": "qwen3_tts_decoder.fp32.onnx.data",
@@ -39,8 +39,8 @@
     {
      "path": "qwen3_tts_codec_encoder.fp32.onnx",
      "asset": "qwen3_tts_codec_encoder.fp32.onnx",
-     "size": 2154600,
-     "sha256": "0a4dbcf5013986fb8e69025ffbfdb91598d294c99365791942a80b32afefbe2f"
+     "size": 248731,
+     "sha256": "c65f1d76fab3a5d7a0e77ffd3b2dfa488e3ad933ba0fc74258baf662e0643a68"
     },
     {
      "path": "qwen3_tts_codec_encoder.fp32.onnx.data",
@@ -51,8 +51,8 @@
     {
      "path": "qwen3_tts_speaker_encoder.fp32.onnx",
      "asset": "qwen3_tts_speaker_encoder.fp32.onnx",
-     "size": 494997,
-     "sha256": "3bbbbe8bc625f3a58b05b2a7572ea0afe4b14fc232a03c7474b26eb3bd949da2"
+     "size": 52795,
+     "sha256": "f96df19bcb2f2ee552f2d78db7d5cb6d731f11d7ef9640e15a0293af529f4573"
     },
     {
      "path": "qwen3_tts_speaker_encoder.fp32.onnx.data",
