@@ -6,7 +6,9 @@ import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.RippleDrawable
+import android.text.InputFilter
 import android.text.InputType
+import android.text.method.DigitsKeyListener
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
@@ -68,12 +70,28 @@ object Ui {
         setOnClickListener { onClick() }
     }
 
-    fun field(c: Context, hint: String, digits: Boolean = false, value: String = ""): EditText = EditText(c).apply {
-        this.hint = hint; setText(value); setTextColor(TEXT); setHintTextColor(MUTED); setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
-        background = bg(RAISED, 10, c, 1); setPadding(dp(c, 12), dp(c, 12), dp(c, 12), dp(c, 12))
-        inputType = if (digits) InputType.TYPE_CLASS_NUMBER else InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
-        isSingleLine = true
-    }
+    /** 입력 칸 종류 — TEXT 글, DIGITS 숫자 키패드, HOST 숫자+점 키패드(PC 주소), HEX 영문 대문자 키보드(인증서 확인 글자) */
+    enum class In { TEXT, DIGITS, HOST, HEX }
+
+    fun field(c: Context, hint: String, digits: Boolean = false, value: String = "", kind: In = if (digits) In.DIGITS else In.TEXT): EditText =
+        EditText(c).apply {
+            this.hint = hint; setText(value); setTextColor(TEXT); setHintTextColor(MUTED); setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+            background = bg(RAISED, 10, c, 1); setPadding(dp(c, 12), dp(c, 12), dp(c, 12), dp(c, 12))
+            when (kind) {
+                In.DIGITS -> inputType = InputType.TYPE_CLASS_NUMBER
+                In.HOST -> {   // 숫자·점만 치는 키패드(쉼표는 받아서 PairRules.cleanHost 가 점으로 바꿈)
+                    keyListener = DigitsKeyListener.getInstance("0123456789.,")
+                    setRawInputType(InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL)
+                }
+                In.HEX -> {    // 한국어 키보드로 안 바뀌게(영문 키보드) + 대문자
+                    inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD or
+                        InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+                    filters = arrayOf(InputFilter.AllCaps())
+                }
+                In.TEXT -> inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+            }
+            isSingleLine = true
+        }
 
     fun col(c: Context, gap: Int = 0): LinearLayout = LinearLayout(c).apply {
         orientation = LinearLayout.VERTICAL

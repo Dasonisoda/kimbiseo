@@ -6,7 +6,7 @@ import java.net.URLDecoder
 data class PairInfo(val hosts: List<String>, val port: Int, val code: String, val fp: String, val pcName: String)
 
 /**
- * 짝짓기 규칙(안드로이드 API 를 안 쓰는 순수 규칙 — JVM 단위 시험 PairRulesTest).
+ * 연결하기 규칙(안드로이드 API 를 안 쓰는 순수 규칙 — JVM 단위 시험 PairRulesTest).
  *  - 주소는 집 안 네트워크·테일스케일·이 PC 자신 모양만(공인 인터넷 주소·이름은 받지 않음 — PC 도 사설 주소에서 온 연결만 받음).
  *  - 인증서 지문은 64자리(QR) 또는 앞 16자리(직접 넣을 때 PC 화면의 '인증서 확인 글자'). 연결할 때 PC 인증서가 이 지문과 같아야만 함.
  */
@@ -45,6 +45,16 @@ object PairRules {
         val h = raw.filter { it in '0'..'9' || it in 'A'..'F' }
         return if (h.length == 64 || h.length == 16) h else null
     }
+
+    /** 직접 넣은 PC 주소 정리 — 한국어 키보드 쉼표(100,101.1.2)·가운뎃점·띄어쓰기·끝 점을 바로잡음. 모양 검사는 lanHost. */
+    fun cleanHost(s: String?): String {
+        var t = (s ?: "").trim().replace(" ", "").replace(" ", "")
+        if (!t.contains(':')) t = t.replace(',', '.').replace('·', '.').replace('。', '.').replace('．', '.').trim('.')
+        return t
+    }
+
+    /** 주소가 IPv4 숫자 4묶음인데 사설·테일스케일 범위 밖인지(오류 문구 고르기용) */
+    fun publicV4(h: String): Boolean = v4(h) != null && !lanHost(h)
 
     fun cleanName(s: String?): String = (s ?: "").filter { !it.isISOControl() }.trim().take(30)
 

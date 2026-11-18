@@ -17,14 +17,15 @@ import org.json.JSONObject
 
 /**
  * PC 김비서가 보낸 폰 일(phone_do) 하기 — 다른 앱 화면을 '여는' 것까지만.
- *  navigate: 길안내 앱 검색 화면 · dial: 전화 앱에 번호 채우기(걸기는 사용자가) · sms: 문자 앱에 받는 사람·내용 채우기(보내기는 사용자가) · open_app: 앱 열기.
+ *  navigate: 길안내 앱 검색 화면(안 열리면 다음 앱 → 웹 지도) · dial: 전화 앱에 번호 채우기(걸기는 사용자가) · sms: 문자 앱에 받는 사람·내용 채우기(보내기는 사용자가) · open_app: 앱 열기.
  *  김비서 화면이 앞에 있으면 바로 열고, 뒤에 있으면(안드로이드가 뒤에서 다른 앱 열기를 막음) '눌러서 열기' 알림을 띄운다.
  *  연락처는 이 폰 안에서만 찾고 PC 로는 결과 한 줄(열었음·비슷한 이름)만 보낸다.
  */
 class Doer(private val ctx: Context) {
     companion object { const val CH = "open"; private var nid = 100 }
 
-    private fun installed(pkg: String) = try { ctx.packageManager.getPackageInfo(pkg, 0); true } catch (_: Throwable) { false }
+    /** 깔려 있고 켜져 있음(설정에서 '사용 중지'한 앱은 깔려 있어도 안 열림) */
+    private fun installed(pkg: String) = try { ctx.packageManager.getApplicationInfo(pkg, 0).enabled } catch (_: Throwable) { false }
 
     fun run(m: JSONObject): JSONObject = try {
         when (m.optString("do")) {
@@ -55,17 +56,28 @@ class Doer(private val ctx: Context) {
 
     private fun navigate(dest: String, app: String): JSONObject {
         if (dest.isEmpty()) return res(false, "목적지가 없어요.")
-        val t = NavRules.pick(dest, app, ::installed, ctx.packageName)
-        if (t.pkg == NavRules.KAKAONAVI) {
-            ctx.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("목적지", dest))
-            val li = ctx.packageManager.getLaunchIntentForPackage(t.pkg) ?: return res(false, "카카오내비를 열지 못했어요.")
-            return res(true, open(li, "카카오내비: $dest", "카카오내비를 열었어요. ${t.note}."))
+        val tm = ctx.getSystemService(android.telephony.TelephonyManager::class.java)
+        val korea = NavRules.inKorea(dest, listOf(tm?.networkCountryIso, tm?.simCountryIso))
+        val pm = ctx.packageManager
+        // 앞의 앱이 안 열리면(사용 중지·주소를 못 받음) 다음 깔린 앱 → 웹 카카오맵
+        for (t in NavRules.candidates(dest, app, ::installed, ctx.packageName, korea)) {
+            val i = if (t.pkg == NavRules.KAKAONAVI) pm.getLaunchIntentForPackage(t.pkg) ?: continue
+                    else Intent(Intent.ACTION_VIEW, Uri.parse(t.uri)).also { if (t.pkg.isNotEmpty()) it.setPackage(t.pkg) }
+            if (t.pkg.isNotEmpty() && i.resolveActivity(pm) == null) continue
+            val instead = NavRules.label(app).let { if (it.isNotEmpty() && it != t.app) "말씀하신 $it 대신 " else "" }
+            val said = try {
+                if (t.pkg == NavRules.KAKAONAVI) {
+                    ctx.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("목적지", dest))
+                    open(i, "카카오내비: $dest", "${instead}카카오내비를 열었어요. ${t.note}.")
+                } else {
+                    val note = if (t.note.isNotEmpty()) " ${t.note}." else ""
+                    open(i, "길안내: $dest", "${instead}${t.app}에서 '$dest'를 열었어요.$note")
+                }
+            } catch (_: android.content.ActivityNotFoundException) { continue } catch (_: SecurityException) { continue }
+            Bus.line("sys", "길안내(${t.app}): $dest")
+            return res(true, said)
         }
-        val i = Intent(Intent.ACTION_VIEW, Uri.parse(t.uri))
-        if (t.pkg.isNotEmpty()) i.setPackage(t.pkg)
-        val note = if (t.note.isNotEmpty()) " ${t.note}." else ""
-        Bus.line("sys", "길안내(${t.app}): $dest")
-        return res(true, open(i, "길안내: $dest", "${t.app}에서 '$dest'를 열었어요.$note"))
+        return res(false, "폰에서 지도 앱도 인터넷 창도 열지 못했어요.")
     }
 
     private fun talk(kind: String, number: String, contact: String, msg: String): JSONObject {

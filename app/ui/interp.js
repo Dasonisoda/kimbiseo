@@ -131,7 +131,7 @@ const Interp = {
       const e = prog["오류"];
       box.append(notice("bad", "통역 목소리를 받지 못했어요", "까닭: " + (e["까닭"] || e["이유"] || "") + " 인터넷을 확인하고 다시 눌러 주세요(받은 만큼은 이어서 받아요)."));
     }
-    const btn = h("button", {class: "btn" + (ready ? "" : " primary"), type: "button", id: "set-interp-get", text: ready ? "통역 목소리 다시 받기" : "통역 목소리 받기(약 640MB)",
+    const btn = h("button", {class: "btn" + (ready ? "" : " primary"), type: "button", id: "set-interp-get", text: ready ? "통역 목소리 다시 받기" : "통역 목소리 받기(약 800MB)",
       onclick: async () => {
         try { await api("/api/interp/install", {}); } catch (e) { toast("받기를 시작하지 못했어요: " + e.message, 7000); return; }
         await this.loadRuntime(box); this.pollRuntime(box);
@@ -139,7 +139,7 @@ const Interp = {
     if (r["설치중"]) { btn.disabled = true; st.textContent = (prog && prog["글"]) || "통역 목소리를 받는 중이에요."; }
     else if (ready) st.textContent = "원어민 목소리를 받아 두었어요.";
     box.append(h("div", {class: "row"}, btn), st,
-      h("p", {class: "hint", text: "목소리: Kokoro-82M(Apache-2.0) · Piper 목소리(독일어 thorsten·그리스어 rapunzelina·러시아어 denis = CC0 자료, 터키어 antalia = CC-BY-4.0 ozgurguler). 읽기 프로그램 Piper(GPL-3.0)는 이 PC 가 공식 배포처에서 직접 받아 따로 돌려요. 합성 목소리예요 — 듣는 사람이 헷갈리면 기계 목소리라고 알려 주세요."}));
+      h("p", {class: "hint", text: "목소리: Kokoro-82M(Apache-2.0) · Piper 목소리(독일어 thorsten·그리스어 rapunzelina·러시아어 denis = CC0 자료, 터키어 antalia = CC-BY-4.0 ozgurguler) · 태국어 MrJMThaiTTS(가중치 Apache-2.0, 학습 자료가 비상업 모델의 합성음이라 상업 사용은 회색 — 걱정되면 '글자만'). 읽기 프로그램 Piper(GPL-3.0)는 이 PC 가 공식 배포처에서 직접 받아 따로 돌려요. 합성 목소리예요 — 듣는 사람이 헷갈리면 기계 목소리라고 알려 주세요."}));
   },
 
   pollRuntime(box) {

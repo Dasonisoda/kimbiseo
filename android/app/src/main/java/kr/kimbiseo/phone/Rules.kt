@@ -17,25 +17,42 @@ object NavRules {
 
     fun enc(s: String): String = URLEncoder.encode(s, "UTF-8").replace("+", "%20")
 
-    /** 고른 앱(없으면 깔린 순서: 카카오맵 → 네이버지도 → 티맵 → 구글지도 → 카카오내비)으로 목적지 검색·길안내 화면 주소.
-     *  좌표 없이 이름으로 찾음(공개판은 지도 열쇠가 없음). 아무것도 없으면 웹 카카오맵. */
-    fun pick(dest: String, want: String, installed: (String) -> Boolean, appName: String): Target {
+    val ORDER = listOf("kakaomap", "naver", "tmap", "google", "kakaonavi")
+    private val WANT = mapOf("kakaomap" to KAKAOMAP, "naver" to NAVER, "tmap" to TMAP, "google" to GOOGLE, "kakaonavi" to KAKAONAVI)
+
+    /** 한국 안 길안내로 볼지: 목적지에 한글이 있거나, 폰이 잡은 망·유심 나라가 한국.
+     *  구글지도는 한국 안 자동차 길찾기를 안 해서(google.navigation 이 "길을 찾을 수 없음"으로 끝남) 이때는 검색 화면으로 연다. */
+    fun inKorea(dest: String, countries: List<String?>): Boolean =
+        dest.any { it in '가'..'힣' || it in 'ㄱ'..'ㆎ' } || countries.any { it.equals("kr", ignoreCase = true) }
+
+    /** 앱 하나의 길안내 주소(좌표 없이 이름으로 찾음 — 공개판은 지도 열쇠가 없음) */
+    fun target(a: String, dest: String, appName: String, korea: Boolean): Target? {
         val d = enc(dest)
-        val all = listOf("kakaomap", "naver", "tmap", "google", "kakaonavi")
-        val order = if (want in all) listOf(want) + all.filter { it != want } else all
-        for (a in order) {
-            val t = when (a) {
-                "kakaomap" -> Target("카카오맵", KAKAOMAP, "kakaomap://search?q=$d", "검색 결과에서 '길찾기'를 눌러 주세요")
-                "naver" -> Target("네이버지도", NAVER, "nmap://search?query=$d&appname=" + enc(appName), "검색 결과에서 '길찾기'를 눌러 주세요")
-                "tmap" -> Target("티맵", TMAP, "tmap://search?name=$d", "검색 결과에서 목적지를 골라 주세요")
-                "google" -> Target("구글지도", GOOGLE, "google.navigation:q=$d")
-                "kakaonavi" -> Target("카카오내비", KAKAONAVI, "", "목적지 이름을 복사해 뒀어요 — 검색창에 붙여 넣어 주세요")
-                else -> null
-            } ?: continue
-            if (installed(t.pkg)) return t
+        return when (a) {
+            "kakaomap" -> Target("카카오맵", KAKAOMAP, "kakaomap://search?q=$d", "검색 결과에서 '길찾기'를 눌러 주세요")
+            "naver" -> Target("네이버지도", NAVER, "nmap://search?query=$d&appname=" + enc(appName), "검색 결과에서 '길찾기'를 눌러 주세요")
+            "tmap" -> Target("티맵", TMAP, "tmap://search?name=$d", "검색 결과에서 목적지를 골라 주세요")
+            "google" -> if (korea) Target("구글지도", GOOGLE, "geo:0,0?q=$d", "검색 결과에서 '경로'를 눌러 주세요")
+                        else Target("구글지도", GOOGLE, "google.navigation:q=$d")
+            "kakaonavi" -> Target("카카오내비", KAKAONAVI, "", "목적지 이름을 복사해 뒀어요 — 검색창에 붙여 넣어 주세요")
+            else -> null
         }
-        return Target("웹 지도", "", "https://map.kakao.com/?q=$d", "")
     }
+
+    fun web(dest: String) = Target("웹 카카오맵", "", "https://map.kakao.com/?q=${enc(dest)}", "")
+
+    /** 열어 볼 차례: 고른 앱(있으면) → 깔린 순서 카카오맵 → 네이버지도 → 티맵 → 구글지도 → 카카오내비 → 웹 카카오맵.
+     *  앞의 앱이 안 열리면(사용 중지·주소를 못 받음) 다음 것을 연다. installed 는 '깔려 있고 켜져 있음'. */
+    fun candidates(dest: String, want: String, installed: (String) -> Boolean, appName: String, korea: Boolean = inKorea(dest, emptyList())): List<Target> {
+        val order = if (want in ORDER) listOf(want) + ORDER.filter { it != want } else ORDER
+        return order.filter { WANT[it]?.let(installed) == true }.mapNotNull { target(it, dest, appName, korea) } + web(dest)
+    }
+
+    fun pick(dest: String, want: String, installed: (String) -> Boolean, appName: String, korea: Boolean = inKorea(dest, emptyList())): Target =
+        candidates(dest, want, installed, appName, korea).first()
+
+    /** PC 쪽이 보낸 앱 이름(kakaomap…)을 사람이 읽는 이름으로 */
+    fun label(want: String): String = target(want, "", "", true)?.app ?: ""
 }
 
 object NameRules {

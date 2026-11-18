@@ -162,7 +162,8 @@ def brains(cfg):
     elif kind == "compat":
         base, model = str(b.get("호환_주소") or "").strip(), str(b.get("호환_모델") or "").strip()
         if base and model:
-            out.append(("OpenAI 호환 API", base, model, keystore.get("compat", cfg) or "none", False))
+            # 'maybe' = 생각 끄기 칸을 보내 봄(모르는 서버가 400 이면 빼고 한 번 더) — 생각하는 모델이 최대 토큰을 생각에 다 써 '빈 답'이 되던 것(0.1.17)
+            out.append(("OpenAI 호환 API", base, model, keystore.get("compat", cfg) or "none", "maybe"))
     elif kind == "openai":
         model = b.get("openai_모델") or ""
         key = keystore.get(b.get("열쇠_이름") or "openai", cfg)
@@ -323,6 +324,10 @@ async def translate(cfg, text, src, dst, history=()):
             try:
                 body = _no_think({"model": model, "messages": msgs, "temperature": 0.2, "stream": False,
                                   "max_tokens": int(cfg_of(cfg).get("번역_최대토큰", 300))}, llama)
+                if name == "OpenAI 호환 API":   # 사용자가 두뇌 설정에 적은 추가 칸(예: 생각 끄기)도 번역 요청에 같이 — 대화 두뇌와 같게
+                    for k, v in dict((cfg.get("두뇌") or {}).get("추가") or {}).items():
+                        if k not in ("model", "messages", "stream", "max_tokens", "tools", "tool_choice"):
+                            body[k] = v
                 r = await cl.post(base.rstrip("/") + "/chat/completions", json=body, headers={"Authorization": f"Bearer {key or 'none'}"})
                 if r.status_code == 400 and "chat_template_kwargs" in body:     # 생각 끄기 칸을 모르는 서버 → 빼고 한 번 더
                     body.pop("chat_template_kwargs", None)

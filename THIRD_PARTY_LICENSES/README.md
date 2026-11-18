@@ -36,9 +36,13 @@
 | Piper 목소리 el_GR-rapunzelina-medium | 학습 자료 CC0 (greek-single-speaker-speech-dataset) · 저장소 MIT | huggingface.co/rhasspy/piper-voices | 통역 — 그리스어(선택) |
 | Piper 목소리 ru_RU-denis-medium | 학습 자료 CC0 (OHF-Voice voice-datasets) · 저장소 MIT | huggingface.co/rhasspy/piper-voices | 통역 — 러시아어(선택) |
 | Piper 목소리 tr_TR-antalia-medium | **CC-BY-4.0** — 출처 표시: "tr_TR-antalia-medium" by ozgurguler (https://huggingface.co/ozgurguler/piper-tr-antalia-medium), 성우 동의 녹음으로 학습한 합성 목소리 | huggingface.co/ozgurguler/piper-tr-antalia-medium | 통역 — 터키어(선택) |
+| MrJMThaiTTS (Kokoro 태국어 판, 목소리 thai_som · fp16 ONNX) — 0.1.17~ | 가중치 **Apache-2.0** (FireH2O/MrJMThaiTTS 의 LICENSE·NOTICE — awslabs/FastThaiG2P v0.3.0 모델을 fp16 으로 바꾼 것). **★학습 자료 주의:** 모델 카드가 밝힌 학습 자료 'Som TTS dataset'(CC BY 4.0 표기)은 OmniVoice 로 만든 합성음이고, OmniVoice 모델은 학습 자료(Emilia 등) 때문에 **CC-BY-NC(비상업)** 로 배포됩니다. 그래서 이 목소리를 상업적으로 쓰는 것이 괜찮은지는 분명하지 않습니다(회색). 김비서는 이 모델을 나눠 주지 않고, '통역 목소리 받기'를 누른 사용자 PC 가 원 저장소에서 직접 받습니다. 상업적으로 쓰려는 분은 직접 판단해 주세요 — 걱정되면 설정 → 통역 → 목소리를 '글자만'으로 | huggingface.co/FireH2O/MrJMThaiTTS (판·sha256 = `installer/interp/models.json` 'thai-mrjm') | 통역 원어민 목소리 — 태국어(선택) |
+| FastThaiG2P (태국어 글자 → 발음) | Apache-2.0 (awslabs/FastThaiG2P). 저장소 설명: 발음 사전은 위키낱말사전(kaikki.org) 발음 + 생성 후 규칙 검사한 발음, 사전에 없는 말은 tltk 에서 가져온 자료로 읽음 | github.com/awslabs/FastThaiG2P 고정 커밋의 파일만 받음(`installer/interp/models.json` 'fastthaig2p') | 태국어 목소리 |
+| PyThaiNLP 5.4.0 | Apache-2.0 | PyPI (판·sha256 = `installer/locks/interp-thai.json`) | 태국어 낱말 나누기(FastThaiG2P 가 씀) |
 
 통역 목소리는 모두 **합성(기계) 목소리**입니다. 듣는 사람이 사람 목소리로 오해할 수 있는 곳에서는 합성 목소리라고 알려 주세요(목소리 제작자 요청).
-태국어·인도네시아어·베트남어는 상업용으로 쓸 수 있는 원어민 목소리(모델·학습 자료 둘 다)가 없어 글자로만 보여 줍니다(비영리 조건의 MMS·Piper th 등은 쓰지 않음).
+인도네시아어·베트남어는 상업용으로 쓸 수 있는 원어민 목소리(모델·학습 자료 둘 다)가 없어 글자로만 보여 줍니다(비영리 조건의 MMS 등은 쓰지 않음).
+태국어(0.1.17~)는 위 MrJMThaiTTS 로 읽습니다 — 가중치는 Apache-2.0 이지만 학습 자료가 비상업 모델의 합성음이라 회색입니다(위 표).
 
 ## 김비서 코드 안에 넣은 남의 코드
 

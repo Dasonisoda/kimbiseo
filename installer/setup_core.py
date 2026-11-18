@@ -12,7 +12,7 @@
 #       --file 은 사용자가 브라우저로 직접 받은 압축 파일(크기·sha256 이 목록과 같아야 씀).
 #   python setup_core.py interp-install --prefix … --data … --status <상태 파일>
 #       통역 원어민 목소리(선택) — 김비서 설정 → 통역 '통역 목소리 받기'가 부름. runtime\python-interp(locks/interp.json: Kokoro·Piper, CPU)
-#       + 목소리 모델(installer/interp/models.json — models.json 과 따로(업데이트 DEPS 에 안 걸리게): Kokoro-82M · Piper 독일어·그리스어·러시아어·터키어, 약 640MB). Piper(GPL-3.0)는
+#       + 목소리 모델(installer/interp/models.json — models.json 과 따로(업데이트 DEPS 에 안 걸리게): Kokoro-82M · Piper 독일어·그리스어·러시아어·터키어 · 태국어 MrJMThaiTTS+FastThaiG2P, 약 770MB). Piper(GPL-3.0)는
 #       사용자 PC 가 PyPI 에서 직접 받아 따로 도는 프로그램(voice/interp_voice.py)에서만 씀 — 우리는 다시 나눠 주지 않음.
 #   python setup_core.py voiceprint-install --prefix … --data … --status <상태 파일>
 #       내 목소리 확인 모델(선택, models.json 의 titanet-small 약 40MB) — 김비서 설정 → 내 목소리 '확인 모델 받기'가 부름.
@@ -1175,8 +1175,11 @@ class Installer:
 
     def do_interp_packages(self):
         r = self.install_env("통역", self.path("runtime", "python-interp"), "interp.json",
-                             "import torch, kokoro, misaki, piper, onnxruntime, soundfile", (0.0, 1.0))
-        return "됨", f"통역 부품 {r}"
+                             "import torch, kokoro, misaki, piper, onnxruntime, soundfile", (0.0, 0.9))
+        # 태국어(0.1.17~): 같은 환경에 pythainlp 만 더함 — 따로 잠가서 이미 통역 목소리를 받은 사람은 이것만 받음
+        r2 = self.install_env("통역 태국어", self.path("runtime", "python-interp"), "interp-thai.json",
+                              "import pythainlp.tokenize, pythainlp.util", (0.9, 1.0))
+        return "됨", f"통역 부품 {r} · 태국어 {r2}"
 
     def do_interp_models(self):
         names, mf = self.interp_models()

@@ -115,6 +115,27 @@ def test_lockout_per_ip():
     assert not a.blocked("192.168.1.66")
 
 
+def test_pair_why():
+    """연결 실패 까닭(폰 앱 문구 고르기) — 없음·틀림·만료·잠김. 틀린 코드는 코드를 없애지 않음(실기 16:23 오타 뒤 같은 코드로 성공)."""
+    d = tempfile.mkdtemp()
+    clk = Clock()
+    a = PH.PhoneAuth(os.path.join(d, "phones.json"), now=clk)
+    assert a.pair_why("12345678", "x", "192.168.1.2") == (None, "없음")
+    code, _ = a.new_code()
+    wrong = "0" * 8 if code != "0" * 8 else "1" * 8
+    assert a.pair_why(wrong, "x", "192.168.1.2") == (None, "틀림")
+    r, why = a.pair_why(code, "x", "192.168.1.2")
+    assert r and why == ""
+    assert a.pair_why(code, "x", "192.168.1.2") == (None, "없음")       # 한 번 쓰면 없음
+    c2, _ = a.new_code()
+    clk.t += 601
+    assert a.pair_why(c2, "x", "192.168.1.10") == (None, "만료")
+    for _ in range(6):
+        a.pair_why(wrong, "x", "192.168.1.66")
+    assert a.pair_why(c2, "x", "192.168.1.66") == (None, "잠김")
+    assert set(PH.PAIR_FAIL_TEXT) == {"틀림", "만료", "없음", "잠김", "잠김_전체"}
+
+
 def test_name_cleaned():
     d = tempfile.mkdtemp()
     a = PH.PhoneAuth(os.path.join(d, "p.json"))
@@ -383,7 +404,7 @@ def test_gateway_tls_pair_ws():
             assert hashlib.sha256(ssl.PEM_cert_to_DER_cert(der)).hexdigest().upper() == gw.fp
             async with httpx.AsyncClient(verify=False, timeout=5) as cl:
                 r = await cl.post(base + "/phone/pair", json={"code": "00000000", "name": "x"})
-                assert r.status_code == 403
+                assert r.status_code == 403 and r.json()["왜"] == "없음" and "코드" in r.json()["오류"]
                 code, _ = auth.new_code()
                 r = await cl.post(base + "/phone/pair", json={"code": code, "name": "시험 폰"})
                 assert r.status_code == 200, r.text

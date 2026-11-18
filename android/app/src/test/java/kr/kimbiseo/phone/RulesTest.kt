@@ -42,6 +42,16 @@ class RulesTest {
         assertEquals("wss://192.168.1.23:8874", PairRules.baseUrl("192.168.1.23", 8874, ws = true))
     }
 
+    @Test fun cleanTypedHost() {
+        assertEquals("100.101.1.2", PairRules.cleanHost("100,101.1.2"))      // 한국어 키보드 쉼표
+        assertEquals("192.168.1.23", PairRules.cleanHost(" 192 .168,1·23. "))
+        assertTrue(PairRules.lanHost(PairRules.cleanHost("100,101,1,2")))
+        assertEquals("fd7a::1", PairRules.cleanHost("fd7a::1"))                   // IPv6 는 그대로
+        assertTrue(PairRules.publicV4("8.8.8.8")); assertFalse(PairRules.publicV4("100.101.1.2")); assertFalse(PairRules.publicV4("abc"))
+        assertEquals("12345678", PairRules.cleanCode("1234 5678"))
+        assertEquals("511A4F301EF22E50", PairRules.cleanFp("511a 4f30 1ef2 2e50"))
+    }
+
     @Test fun navPicksInstalledApp() {
         val none = NavRules.pick("강남역", "", { false }, "kr.kimbiseo.phone")
         assertEquals("https://map.kakao.com/?q=%EA%B0%95%EB%82%A8%EC%97%AD", none.uri)
@@ -50,8 +60,23 @@ class RulesTest {
         assertTrue(naver.uri.startsWith("nmap://search?query=%EA%B0%95%EB%82%A8%EC%97%AD%202"))
         val first = NavRules.pick("부산역", "", { it == NavRules.TMAP || it == NavRules.GOOGLE }, "x")
         assertEquals(NavRules.TMAP, first.pkg)
+        // 한국 안(한글 목적지·한국 망): 구글지도는 자동차 길찾기가 없어 검색 화면으로
         val g = NavRules.pick("부산역", "google", { true }, "x")
-        assertEquals("google.navigation:q=%EB%B6%80%EC%82%B0%EC%97%AD", g.uri)
+        assertEquals("geo:0,0?q=%EB%B6%80%EC%82%B0%EC%97%AD", g.uri)
+        assertEquals("geo:0,0?q=Busan%20Station", NavRules.pick("Busan Station", "google", { true }, "x", NavRules.inKorea("Busan Station", listOf("kr", null))).uri)
+        // 한국 밖·영어 목적지: 바로 길안내
+        assertEquals("google.navigation:q=Grand%20Palace", NavRules.pick("Grand Palace", "google", { true }, "x", NavRules.inKorea("Grand Palace", listOf("th", "th"))).uri)
+    }
+
+    @Test fun navFallsBackInOrder() {
+        // 고른 앱 → 깔린 순서 → 웹 카카오맵(앞 앱이 안 열리면 Doer 가 다음 것을 엶)
+        val c = NavRules.candidates("강남역", "tmap", { it != NavRules.KAKAOMAP }, "x", true)
+        assertEquals(listOf("티맵", "네이버지도", "구글지도", "카카오내비", "웹 카카오맵"), c.map { it.app })
+        // 고른 앱이 없거나 사용 중지면 빠지고, 웹 지도는 늘 마지막
+        val d = NavRules.candidates("강남역", "kakaonavi", { it == NavRules.GOOGLE }, "x", true)
+        assertEquals(listOf("구글지도", "웹 카카오맵"), d.map { it.app })
+        assertEquals("티맵", NavRules.label("tmap")); assertEquals("", NavRules.label(""))
+        assertTrue(NavRules.inKorea("강남역", emptyList())); assertTrue(!NavRules.inKorea("Grand Palace", listOf("th", "")))
     }
 
     @Test fun contactNames() {

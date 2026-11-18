@@ -5,6 +5,9 @@
 #                                 모델 = <모델 폴더>\kokoro-82m (config.json · kokoro-v1_0.pth · voices\<목소리>.pt)
 #     piper:<목소리 이름>          Piper(piper-tts, GPL-3.0 — 사용자 PC 가 PyPI 에서 직접 받은 꾸러미를 이 프로그램이 불러 씀)
 #                                 모델 = <모델 폴더>\piper-<목소리 이름>\<목소리 이름>.onnx(+ .onnx.json)
+#     thai:<목소리 묶음>            태국어(0.1.17~) — MrJMThaiTTS(Kokoro 태국어 판 ONNX, onnxruntime · torch 안 씀)
+#                                 모델 = <모델 폴더>	hai-mrjm(kokoro_thai.fp16w.onnx · <묶음>.npy · config.json)
+#                                 글자 → 발음 = <모델 폴더>astthaig2p(awslabs/FastThaiG2P 고정 커밋 파일 — 꾸러미 pythainlp 를 씀)
 #   규약: 요청 한 줄 {"voice":"kokoro:a:af_heart","text":"..."} → 머리 한 줄 {"n":바이트,"sr":표본율} 또는 {"error":"..."} + int16 모노 PCM
 #         켠 뒤 준비되면 {"ready": true} 한 줄(귀 서버는 이 줄을 받은 뒤 요청을 보냄 — 처음 불러오기 10~30초)
 #   espeak-ng(Kokoro 의 영어·유럽 말 읽기, Piper 안의 읽기)는 한글 등 영문 아닌 경로를 못 읽음 → 자료 폴더를 %LOCALAPPDATA%\KimBiseo\espeak(영문 경로)로
@@ -88,6 +91,75 @@ class Kokoro:
         return (np.clip(a, -1, 1) * 32767).astype("<i2").tobytes(), 24000
 
 
+class Thai:
+    """태국어 — FastThaiG2P 의 TTS(ONNX 판)를 그대로 씀. 긴 글은 띄어쓰기에서 잘라 차례로 만들고 사이에 짧은 쉼."""
+    CHUNK = 120   # 글자 수(태국어는 문장 사이를 띄어 씀). 발음 510개를 넘으면 더 잘게
+    SR = 24000
+
+    def __init__(self, models, threads):
+        g2p = os.path.join(models, "fastthaig2p")
+        if not os.path.isfile(os.path.join(g2p, "fastthaig2p", "tts.py")):
+            raise FileNotFoundError("태국어 글자 읽기(fastthaig2p)가 없음 — 설정 → 통역 → '통역 목소리 받기'")
+        # pythainlp 가 처음 불릴 때 만드는 자료 폴더를 사용자 홈 대신 모델 폴더 옆(_pythainlp)에
+        os.environ.setdefault("PYTHAINLP_DATA_DIR", os.path.join(models, "_pythainlp"))
+        if g2p not in sys.path:
+            sys.path.insert(0, g2p)
+        self.root = os.path.join(models, "thai-mrjm")
+        self.threads = threads
+        self.tts = {}
+
+    def _engine(self, name):
+        t = self.tts.get(name)
+        if t is None:
+            from fastthaig2p.tts import TTS
+            vp = os.path.join(self.root, os.path.basename(name) + ".npy")
+            if not os.path.isfile(vp):
+                raise FileNotFoundError("목소리 파일 없음: thai-mrjm/" + os.path.basename(vp))
+            t = self.tts[name] = TTS(os.path.join(self.root, "kokoro_thai.fp16w.onnx"), vp,
+                                     config_path=os.path.join(self.root, "config.json"), intra_op_threads=self.threads)
+        return t
+
+    @classmethod
+    def chunks(cls, text, size=None):
+        """띄어쓰기에서 잘라 size 글자 안쪽으로(띄어쓰기가 없으면 그대로 자름)."""
+        size = size or cls.CHUNK
+        out, cur = [], ""
+        for w in str(text or "").split():
+            while len(w) > size:
+                if cur:
+                    out.append(cur)
+                    cur = ""
+                out.append(w[:size])
+                w = w[size:]
+            if cur and len(cur) + 1 + len(w) > size:
+                out.append(cur)
+                cur = w
+            else:
+                cur = (cur + " " + w).strip()
+        if cur:
+            out.append(cur)
+        return out
+
+    def say(self, name, text):
+        import numpy as np
+        t = self._engine(name)
+        parts, gap = [], np.zeros(int(self.SR * 0.18), np.float32)
+        todo = self.chunks(text)
+        while todo:
+            c = todo.pop(0)
+            try:
+                a = np.asarray(t.generate(c), np.float32).ravel()
+            except ValueError:   # 발음이 510개를 넘음 → 반으로
+                if len(c) < 8:
+                    raise
+                todo[:0] = self.chunks(c, max(8, len(c) // 2))
+                continue
+            if a.size:
+                parts += [a, gap]
+        a = np.concatenate(parts[:-1]) if parts else np.zeros(0, np.float32)
+        return (np.clip(a, -1, 1) * 32767).astype("<i2").tobytes(), self.SR
+
+
 class Piper:
     def __init__(self, root):
         import piper
@@ -127,7 +199,12 @@ def main():
     def engine(kind):
         if kind not in eng:
             t0 = time.perf_counter()
-            eng[kind] = Kokoro(os.path.join(a.models, "kokoro-82m"), a.threads) if kind == "kokoro" else Piper(a.models)
+            if kind == "kokoro":
+                eng[kind] = Kokoro(os.path.join(a.models, "kokoro-82m"), a.threads)
+            elif kind == "thai":
+                eng[kind] = Thai(a.models, a.threads)
+            else:
+                eng[kind] = Piper(a.models)
             log(f"{kind} 불러옴 {time.perf_counter() - t0:.1f}초")
         return eng[kind]
 
@@ -138,6 +215,8 @@ def main():
             return engine("kokoro").say(lang, name, text)
         if kind == "piper":
             return engine("piper").say(rest, text)
+        if kind == "thai":
+            return engine("thai").say(rest, text)
         raise ValueError(f"모르는 목소리 {voice}")
 
     for v in [x for x in a.warm.split(",") if x]:

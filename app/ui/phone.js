@@ -20,25 +20,25 @@ const Phone = {
     const [l1, i1] = box("ph-on", "폰 연결 켜기", "폰.켜기", false);
     const [l2, i2] = box("ph-ts", "테일스케일로도 연결 받기(집 밖에서 쓸 때)", "폰.테일스케일_허용", false);
     const [l3, i3] = box("ph-pc", "폰으로 말해도 이 PC 조작하기(검색·사이트·프로그램 열기·메모장)", "폰.PC조작_허용", true);
-    s1.append(h("p", {class: "hint", text: "내 폰에 '김비서' 앱을 깔고 이 PC 와 짝지으면, 폰으로 말해도 이 PC 의 김비서가 대답해요. " +
-      "같은 와이파이(집 안 네트워크)에서만 연결되고, 짝지은 폰만 들어올 수 있어요. 쓰지 않으면 꺼 두세요(꺼져 있으면 아무 연결도 받지 않아요)."}),
+    s1.append(h("p", {class: "hint", text: "내 폰에 '김비서' 앱을 깔고 이 PC 와 연결하면, 폰으로 말해도 이 PC 의 김비서가 대답해요. " +
+      "같은 와이파이(집 안 네트워크)에서만 연결되고, 연결한 폰만 들어올 수 있어요. 쓰지 않으면 꺼 두세요(꺼져 있으면 아무 연결도 받지 않아요)."}),
     l1, l2, l3,
     h("p", {class: "hint", text: "처음 켤 때 윈도우 방화벽 창이 뜨면 '개인 네트워크'만 허용해 주세요. 테일스케일은 폰과 PC 에 둘 다 깔아 같은 계정으로 로그인했을 때만 켜세요."}),
     Settings.saveRow("ph-save", () => ({폰: {켜기: i1.checked, 테일스케일_허용: i2.checked, PC조작_허용: i3.checked}})));
     s1.querySelector("#ph-save").addEventListener("click", () => setTimeout(() => this.refresh(stat, list), 800));
 
     const stat = h("div", {id: "ph-status"});
-    const s2 = h("div", {class: "set-sec", id: "ph-pair"}, h("h2", {text: "폰과 짝짓기"}), stat);
+    const s2 = h("div", {class: "set-sec", id: "ph-pair"}, h("h2", {text: "폰과 연결하기"}), stat);
     card.appendChild(s2);
     const qr = h("div", {id: "ph-qr", class: "qr-box"});
     s2.append(h("ol", {class: "howto"},
       h("li", {text: "폰에 '김비서' 앱을 깔아요(설치 파일 받는 곳은 README 의 '폰 앱' 칸)."}),
-      h("li", {text: "아래 '짝 코드 만들기'를 누르면 QR 과 8자리 숫자가 나와요(10분 동안, 한 번만 쓸 수 있어요)."}),
+      h("li", {text: "아래 '연결 코드 만들기'를 누르면 QR 과 8자리 숫자가 나와요(10분 동안, 한 번만 쓸 수 있어요)."}),
       h("li", {text: "폰 앱에서 'QR 찍기'로 찍거나, 이 PC 주소와 숫자를 직접 넣어요."})),
-    h("div", {class: "row"}, h("button", {class: "btn primary", type: "button", id: "ph-code", text: "짝 코드 만들기", onclick: () => this.code(qr)})), qr);
+    h("div", {class: "row"}, h("button", {class: "btn primary", type: "button", id: "ph-code", text: "연결 코드 만들기", onclick: () => this.code(qr)})), qr);
 
     const list = h("div", {id: "ph-devices"});
-    const s3 = h("div", {class: "set-sec"}, h("h2", {text: "짝지은 폰"}), list);
+    const s3 = h("div", {class: "set-sec"}, h("h2", {text: "연결한 폰"}), list);
     card.appendChild(s3);
     await this.refresh(stat, list);
     this.timer = setInterval(() => { if (!document.getElementById("ph-status")) this.stop(); else this.refresh(stat, list); }, 5000);
@@ -48,7 +48,7 @@ const Phone = {
     let j;
     try { j = await api("/api/phone"); } catch (e) { stat.replaceChildren(notice("bad", "상태를 읽지 못했어요", e.message)); return; }
     stat.replaceChildren();
-    if (!j["켜짐"]) stat.appendChild(notice("", "폰 연결이 꺼져 있어요", "위에서 '폰 연결 켜기'를 켜고 저장하면 짝지을 수 있어요."));
+    if (!j["켜짐"]) stat.appendChild(notice("", "폰 연결이 꺼져 있어요", "위에서 '폰 연결 켜기'를 켜고 저장하면 연결할 수 있어요."));
     else if (!j["듣는중"]) stat.appendChild(notice("bad", "폰 연결을 켜지 못했어요", j["오류"] || "김비서를 다시 켜 보세요."));
     else {
       const addr = (j["주소"] || []).map((a) => `${a}:${j["포트"]}`).join(" · ") || "(집 안 네트워크 주소를 못 찾음)";
@@ -57,16 +57,16 @@ const Phone = {
     }
     const devs = j["기기"] || [];
     list.replaceChildren();
-    if (!devs.length) { list.appendChild(h("p", {class: "hint", text: "아직 짝지은 폰이 없어요."})); return; }
+    if (!devs.length) { list.appendChild(h("p", {class: "hint", text: "아직 연결한 폰이 없어요."})); return; }
     const ul = h("ul", {class: "devices"});
     devs.forEach((d) => ul.appendChild(h("li", {}, h("span", {text: `${d["이름"]} — 등록 ${d["등록"] || ""}` + (d["마지막"] ? ` · 마지막 연결 ${d["마지막"]}` : "")}),
       h("button", {class: "btn ghost", type: "button", "data-dev": d["기기"], text: "지우기", onclick: async () => {
-        if (!(await confirmBox(`'${d["이름"]}' 폰의 짝을 지울까요? 그 폰은 다시 짝지어야 연결돼요.`, "네, 지울게요"))) return;
+        if (!(await confirmBox(`'${d["이름"]}' 폰의 연결을 끊을까요? 그 폰은 다시 연결해야 써요.`, "네, 지울게요"))) return;
         await api("/api/phone/remove", {"기기": d["기기"]}).catch((e) => toast(e.message));
         this.refresh(document.getElementById("ph-status"), list);
       }}))));
     list.append(ul, h("div", {class: "row"}, h("button", {class: "btn ghost", type: "button", id: "ph-remove-all", text: "전부 지우기", onclick: async () => {
-      if (!(await confirmBox("짝지은 폰을 전부 지울까요?", "네, 지울게요"))) return;
+      if (!(await confirmBox("연결한 폰을 전부 지울까요?", "네, 지울게요"))) return;
       await api("/api/phone/remove", {"전부": true}).catch((e) => toast(e.message));
       this.refresh(document.getElementById("ph-status"), list);
     }})));
@@ -74,7 +74,7 @@ const Phone = {
 
   async code(qr) {
     let j;
-    try { j = await api("/api/phone/code", {}); } catch (e) { qr.replaceChildren(notice("bad", "짝 코드를 만들지 못했어요", e.message)); return; }
+    try { j = await api("/api/phone/code", {}); } catch (e) { qr.replaceChildren(notice("bad", "연결 코드를 만들지 못했어요", e.message)); return; }
     const img = h("img", {alt: "폰 앱으로 찍을 QR", id: "ph-qr-img", width: "240", height: "240", src: "data:image/svg+xml;utf8," + encodeURIComponent(j["QR"])});
     const left = h("span", {id: "ph-code-left"});
     const code = String(j["코드"]);

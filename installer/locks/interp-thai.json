@@ -1,0 +1,18 @@
+{
+ "schema": "kimbiseo-lock/1",
+ "made": "2026-11-18",
+ "requirements": "installer/requirements/interp-thai.txt",
+ "python": "3.11.9",
+ "platform": "AMD64/win32",
+ "torch_index": "",
+ "packages": [
+  {
+   "name": "pythainlp",
+   "version": "5.4.0",
+   "file": "pythainlp-5.4.0-py3-none-any.whl",
+   "url": "https://files.pythonhosted.org/packages/6d/13/3304199eec02b89573b6042078fd780e627d6637228dd6f69fad45f3262e/pythainlp-5.4.0-py3-none-any.whl",
+   "sha256": "9239753df877202da1a50dd2842d9569eff764034f31f20222b3df4def5df193",
+   "sdist": false
+  }
+ ]
+}

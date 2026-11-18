@@ -1,0 +1,5 @@
+# 태국어 통역 목소리(0.1.17~ · 선택 부품) — 통역 목소리 환경(runtime\python-interp)에 더 까는 것. locks/interp-thai.json 대로(정확한 판 + sha256).
+#   interp.txt 와 따로 둔 까닭: interp.json 이 바뀌면 이미 통역 목소리를 받은 사람도 부품 115개를 다시 받게 됨 → 태국어 몫만 따로.
+#   pythainlp(Apache-2.0) = 태국어 낱말 나누기(FastThaiG2P 가 씀). 의존: tzdata(이미 interp.json 에 있음).
+#   onnxruntime·numpy 는 interp.json 에 이미 있음. FastThaiG2P 코드·자료는 꾸러미가 아니라 interp/models.json 'fastthaig2p'(고정 커밋 파일)로 받음.
+pythainlp==5.4.0

@@ -5,6 +5,7 @@ import android.app.Activity
 import android.app.Dialog
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Rect
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.os.Build
@@ -12,6 +13,7 @@ import android.os.Bundle
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowInsets
 import android.view.WindowManager
 import android.view.inputmethod.EditorInfo
 import android.widget.FrameLayout
@@ -50,6 +52,7 @@ class MainActivity : Activity() {
         window.statusBarColor = Ui.BG; window.navigationBarColor = Ui.BG
         root = FrameLayout(this).apply { setBackgroundColor(Ui.BG) }
         setContentView(root)
+        fitKeyboard()
         handle(intent)
         if (screen.isEmpty()) show()
     }
@@ -70,7 +73,7 @@ class MainActivity : Activity() {
         if (d != null && d.startsWith("kimbiseo://")) {
             val p = PairRules.parse(d)
             pending = p
-            screen = ""; show(if (p == null) "QR 내용이 김비서 짝 코드가 아니에요." else null)
+            screen = ""; show(if (p == null) "QR 내용이 김비서 연결 코드가 아니에요." else null)
             return
         }
         if (BuildConfig.TEST_HOOKS && i != null) testHooks(i)
@@ -88,6 +91,15 @@ class MainActivity : Activity() {
         if (i.getBooleanExtra("test_settings", false)) { screen = "settings"; show() }
         if (i.getBooleanExtra("test_talk", false)) { screen = ""; show() }
         if (i.getBooleanExtra("test_stop", false)) TalkService.me?.stopTalk()
+        // 폰 일 바로 해 보기(PC 없이): {"do":"navigate","destination":"강남역","app":"google"} → 결과 한 줄을 화면 기록·logcat 에
+        //  (새 intent 를 받는 동안은 잠깐 '뒤'로 보여서, 화면이 다시 앞에 온 뒤에 함 — 실제처럼 바로 열기)
+        i.getStringExtra("test_do")?.let { j ->
+            root.postDelayed({
+                val r = Doer(this).run(org.json.JSONObject(j))
+                android.util.Log.i("KimbiseoTest", "test_do " + r)
+                Bus.line("sys", "시험 폰 일: " + r.optString("말"))
+            }, 800)
+        }
     }
 
     private fun show(msg: String? = null) {
@@ -98,6 +110,33 @@ class MainActivity : Activity() {
             screen == "settings" -> settingsScreen()
             else -> talkScreen()
         }
+    }
+
+    /**
+     * 키보드·상태 표시줄·아래 막대에 화면이 가려지지 않게(모든 화면 공통).
+     *  안드로이드 15(targetSdk 35+)는 앱이 화면 끝까지 그려져 windowSoftInputMode=adjustResize 가 안 먹음 → 안드로이드 11 이상은
+     *  직접 inset(막대·키보드 높이)만큼 root 아래쪽을 띄움. 그러면 스크롤 화면이 줄어들고, 고르고 있는 입력 칸을 키보드 위로 올려 보여 줌.
+     *  안드로이드 8~10 은 매니페스트의 adjustResize 가 그대로 함.
+     */
+    private fun fitKeyboard() {
+        if (Build.VERSION.SDK_INT < 30) return
+        window.setDecorFitsSystemWindows(false)
+        root.setOnApplyWindowInsetsListener { v, ins ->
+            val bars = ins.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
+            val ime = ins.getInsets(WindowInsets.Type.ime())
+            val bottom = maxOf(bars.bottom, ime.bottom)
+            if (v.paddingBottom != bottom || v.paddingTop != bars.top) {
+                v.setPadding(bars.left, bars.top, bars.right, bottom)
+                v.post { showFocused() }
+            }
+            WindowInsets.CONSUMED
+        }
+    }
+
+    /** 고르고 있는 입력 칸이 보이게 스크롤 + 대화 화면이면 자막 마지막 줄로 */
+    private fun showFocused() {
+        currentFocus?.let { f -> val r = Rect(); f.getDrawingRect(r); r.bottom += dp(this, 72); f.requestRectangleOnScreen(r, true) }
+        if (screen == "talk") logScroll?.let { sv -> sv.scrollTo(0, (log?.height ?: 0)) }
     }
 
     private fun page(): LinearLayout {
@@ -113,32 +152,40 @@ class MainActivity : Activity() {
         screen = "pair"
         val p = page()
         p.addView(Ui.text(this, "김비서", 14f, Ui.TEXT2, true))
-        p.addView(Ui.text(this, "내 PC 와 짝짓기", 26f, Ui.TEXT, true))
-        p.addView(Ui.text(this, "PC 의 김비서에서 설정 → 폰 연결 → '짝 코드 만들기'를 누르면 QR 과 8자리 숫자가 나와요. 폰과 PC 가 같은 와이파이여야 해요.", 15f, Ui.TEXT2))
+        p.addView(Ui.text(this, "내 PC 와 연결하기", 26f, Ui.TEXT, true))
+        p.addView(Ui.text(this, "PC 의 김비서에서 설정 → 폰 연결 → '연결 코드 만들기'를 누르면 QR 과 8자리 숫자가 나와요. 폰과 PC 가 같은 와이파이이거나, 둘 다 테일스케일이 켜져 있어야 해요.", 15f, Ui.TEXT2))
         p.addView(Ui.button(this, "QR 찍기", Ui.Kind.PRIMARY) { scan() }, lp())
         if (msg != null) p.addView(Ui.text(this, msg, 14f, Ui.BAD))
         val c = Ui.card(this)
         c.addView(Ui.text(this, "QR 없이 직접 넣기", 16f, Ui.TEXT, true))
-        val host = Ui.field(this, "PC 주소 (예: 192.168.1.23)")
-        val port = Ui.field(this, "포트", true, "8874")
-        val code = Ui.field(this, "짝 코드 8자리", true)
-        val fp = Ui.field(this, "인증서 확인 글자 16자리 (예: 3F2A 91C0 …)")
-        for (f in listOf(host, port, code, fp)) c.addView(f, lp())
+        val host = Ui.field(this, "PC 주소 (예: 192.168.1.23 · 테일스케일 100.x.x.x)", value = typed[0], kind = Ui.In.HOST)
+        val port = Ui.field(this, "포트", true, typed[1].ifEmpty { "8874" })
+        val code = Ui.field(this, "연결 코드 8자리", true, typed[2])
+        val fp = Ui.field(this, "인증서 확인 글자 16자리 (예: 3F2A 91C0 …)", value = typed[3], kind = Ui.In.HEX)
+        val fields = listOf(host, port, code, fp)
+        for (f in fields) c.addView(f, lp())
         val err = Ui.text(this, "", 14f, Ui.BAD)
-        c.addView(Ui.button(this, "짝짓기") {
-            val h = host.text.toString().trim(); val pt = port.text.toString().toIntOrNull() ?: 0
+        c.addView(Ui.button(this, "연결하기") {
+            for ((i, f) in fields.withIndex()) typed[i] = f.text.toString()   // 오류가 나도 넣은 값은 그대로 둠
+            val h = PairRules.cleanHost(host.text.toString()); val pt = port.text.toString().trim().toIntOrNull() ?: 0
+            if (h != host.text.toString()) { host.setText(h); typed[0] = h }
             val cd = PairRules.cleanCode(code.text.toString()); val f = PairRules.cleanFp(fp.text.toString())
+            err.setTextColor(Ui.BAD)
             err.text = when {
-                !PairRules.lanHost(h) -> "PC 주소는 집 안 네트워크 주소(192.168.x.x 같은 것)만 돼요."
-                pt !in 1..65535 -> "포트 숫자를 확인해 주세요."
-                cd == null -> "짝 코드는 숫자 8자리예요."
-                f == null -> "인증서 확인 글자는 PC 화면에 나온 16자리(숫자·A~F)예요."
-                else -> { doPair(PairInfo(listOf(h), pt, cd, f, "")); "" }
+                h.isEmpty() -> "PC 주소를 넣어 주세요(PC 화면의 '연결 코드 만들기'에 나온 주소)."
+                !PairRules.lanHost(h) -> if (PairRules.publicV4(h))
+                    "그 주소는 인터넷 공인 주소라 안 돼요. 집 안 주소(192.168.x.x 같은 것)나 테일스케일 주소(100.x.x.x)를 넣어 주세요."
+                    else "PC 주소 모양이 아니에요. 192.168.x.x 같은 집 안 주소나 테일스케일 주소(100.x.x.x)를 숫자와 점으로 넣어 주세요."
+                pt !in 1..65535 -> "포트 숫자를 확인해 주세요(보통 8874)."
+                cd == null -> "연결 코드는 숫자 8자리예요."
+                f == null -> "인증서 확인 글자는 PC 화면에 나온 16자리(숫자·A~F)예요. 띄어쓰기는 상관없어요."
+                else -> { err.setTextColor(Ui.TEXT2); doPair(PairInfo(listOf(h), pt, cd, f, ""), err); "연결하는 중" }
             }
+            if (err.text.isNotEmpty()) err.post { val r = Rect(); err.getDrawingRect(r); err.requestRectangleOnScreen(r, false) }
         }, lp())
         c.addView(err)
         p.addView(c, lp())
-        p.addView(Ui.text(this, "짝지은 폰만 PC 김비서와 대화할 수 있어요. 대화는 집 안 네트워크 안에서 암호화돼 오가고, 이 앱은 다른 서버로 아무것도 보내지 않아요.", 13f, Ui.MUTED))
+        p.addView(Ui.text(this, "연결한 폰만 PC 김비서와 대화할 수 있어요. 대화는 집 안 네트워크 안에서 암호화돼 오가고, 이 앱은 다른 서버로 아무것도 보내지 않아요.", 13f, Ui.MUTED))
     }
 
     private fun pairConfirm(info: PairInfo) {
@@ -151,9 +198,9 @@ class MainActivity : Activity() {
         c.addView(Ui.text(this, "인증서 확인 글자", 13f, Ui.TEXT2))
         c.addView(Ui.mono(this, PairRules.words(info.fp), 22f, Ui.TEXT))
         p.addView(c, lp())
-        p.addView(Ui.text(this, "PC 화면의 '인증서 확인 글자'와 똑같을 때만 짝지어 주세요. 다르면 다른 기기가 PC 인 척하는 것일 수 있어요.", 14f, Ui.TEXT2))
+        p.addView(Ui.text(this, "PC 화면의 '인증서 확인 글자'와 똑같을 때만 연결해 주세요. 다르면 다른 기기가 PC 인 척하는 것일 수 있어요.", 14f, Ui.TEXT2))
         val st = Ui.text(this, "", 14f, Ui.TEXT2)
-        p.addView(Ui.button(this, "같아요, 짝짓기", Ui.Kind.PRIMARY) { st.text = "짝짓는 중"; doPair(info, st) }, lp())
+        p.addView(Ui.button(this, "같아요, 연결하기", Ui.Kind.PRIMARY) { st.text = "연결하는 중"; doPair(info, st) }, lp())
         p.addView(Ui.button(this, "그만두기", Ui.Kind.QUIET) { pending = null; show() }, lp())
         p.addView(st)
     }
@@ -164,8 +211,8 @@ class MainActivity : Activity() {
             runOnUiThread {
                 if (r.ok) {
                     Store.save(this, listOf(r.host) + info.hosts.filter { it != r.host }, info.port, r.fp.ifEmpty { info.fp }, r.device, r.pcName, r.token)
-                    pending = null; Bus.lines.clear()
-                    Bus.line("sys", "${r.pcName.ifEmpty { "PC" }} 와 짝지었어요. '대화 시작'을 누르고 말해 보세요.")
+                    pending = null; Bus.lines.clear(); typed[2] = ""
+                    Bus.line("sys", "${r.pcName.ifEmpty { "PC" }} 와 연결했어요. '대화 시작'을 누르고 말해 보세요.")
                     show()
                 } else if (st != null) { st.setTextColor(Ui.BAD); st.text = r.msg } else { pending = null; show(r.msg) }
             }
@@ -184,7 +231,7 @@ class MainActivity : Activity() {
         val c = r.contents ?: return
         val p = PairRules.parse(c)
         pending = p
-        show(if (p == null) "QR 내용이 김비서 짝 코드가 아니에요." else null)
+        show(if (p == null) "QR 내용이 김비서 연결 코드가 아니에요." else null)
     }
 
     // ---------------------------------------------------------------- 대화
@@ -218,6 +265,7 @@ class MainActivity : Activity() {
         logScroll = ScrollView(this)
         log = Ui.col(this, 12).apply { setPadding(dp(c, 20), dp(c, 16), dp(c, 20), dp(c, 16)) }
         logScroll!!.addView(log)
+        logScroll!!.addOnLayoutChangeListener { v, _, t, _, b, _, ot, _, ob -> if (b - t != ob - ot) v.post { v.scrollTo(0, log?.height ?: 0) } }
         whole.addView(logScroll, lp(h = 0, weight = 1f))
         // 아래: 글로 말하기 · 마이크 · 대화 시작/끝
         val bottom = Ui.col(this, 12).apply { setPadding(dp(c, 16), dp(c, 12), dp(c, 16), dp(c, 16)); background = Ui.bg(Ui.CARD, 0, c) }
@@ -250,6 +298,8 @@ class MainActivity : Activity() {
     }
 
     private var pendingText: String? = null
+    /** 직접 넣기 칸에 넣은 값(주소·포트·코드·확인 글자) — 화면을 다시 그려도 남김 */
+    private val typed = arrayOf("", "", "", "")
 
     private fun startTalk() {
         val need = ArrayList<String>()
@@ -399,7 +449,7 @@ class MainActivity : Activity() {
         p.addView(Ui.button(this, "대화로 돌아가기", Ui.Kind.QUIET) { screen = ""; show() }.apply { gravity = Gravity.START or Gravity.CENTER_VERTICAL; setPadding(0, 0, 0, 0) })
         p.addView(Ui.text(this, "설정", 26f, Ui.TEXT, true))
         val c = Ui.card(this, 8)
-        c.addView(Ui.text(this, "짝지은 PC", 13f, Ui.TEXT2))
+        c.addView(Ui.text(this, "연결한 PC", 13f, Ui.TEXT2))
         c.addView(Ui.text(this, pc.name.ifEmpty { "PC" }, 17f, Ui.TEXT, true))
         c.addView(Ui.text(this, "주소 " + pc.hosts.joinToString(" · ") + " · 포트 ${pc.port}", 13f, Ui.TEXT2))
         c.addView(Ui.text(this, "인증서 확인 글자", 13f, Ui.TEXT2))
@@ -421,11 +471,11 @@ class MainActivity : Activity() {
         g.addView(greet, lp())
         p.addView(g, lp())
         p.addView(Ui.text(this, "PC 조작(검색·사이트·프로그램 열기·메모장)과 '등록한 목소리만 명령 받기'는 PC 의 김비서 설정에서 켜고 꺼요. 지우기·보내기처럼 되돌리기 어려운 일은 이 폰 화면에서 '실행할까요?'를 물어요.", 13f, Ui.MUTED))
-        p.addView(Ui.button(this, "짝 지우기", Ui.Kind.DANGER) {
+        p.addView(Ui.button(this, "연결 끊기", Ui.Kind.DANGER) {
             TalkService.me?.stopTalk()
             Store.clear(this); Bus.lines.clear(); Bus.pc = null; screen = ""; show()
         }, lp())
-        p.addView(Ui.text(this, "이 폰의 짝 정보만 지워요. PC 쪽 목록에서도 지우려면 PC 설정 → 폰 연결 → 짝지은 폰에서 '지우기'를 눌러 주세요.", 13f, Ui.MUTED))
+        p.addView(Ui.text(this, "이 폰의 연결 정보만 지워요. PC 쪽 목록에서도 지우려면 PC 설정 → 폰 연결 → 연결한 폰에서 '지우기'를 눌러 주세요.", 13f, Ui.MUTED))
         p.addView(Ui.text(this, "김비서 폰 앱 ${BuildConfig.VERSION_NAME} · 하이라이프PC", 12f, Ui.MUTED))
     }
 }

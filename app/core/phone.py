@@ -249,20 +249,29 @@ class PhoneAuth:
             return max(0, int(self.code[1] - self.now())) if self.code else 0
 
     def pair(self, code, name, ip):
+        return self.pair_why(code, name, ip)[0]
+
+    def pair_why(self, code, name, ip):
+        """(등록 결과 또는 None, 까닭). 까닭 = 잠김(이 주소)·잠김_전체·없음(만든 코드 없음/이미 씀)·만료·틀림 — 폰 앱이 알맞은 문구를 고르게.
+        틀린 코드는 코드를 없애지 않음(맞는 코드가 오면 그때 한 번 씀). 까닭은 코드가 있는지만 알려 줄 뿐 코드 값은 새지 않음."""
         if self.blocked(ip):
             self._locked_hit(ip, "짝짓기(이 주소 잠김)")
-            return None
+            return None, "잠김"
         if self.pair_blocked():
             self._locked_hit(ip, "짝짓기(전체 잠김)")
-            return None
+            return None, "잠김_전체"
         k = self._h(str(code or "").strip())
         with self.lock:
-            ok = self.code is not None and hmac.compare_digest(k, self.code[0]) and self.code[1] >= self.now()
+            cur = self.code
+            match = cur is not None and hmac.compare_digest(k, cur[0])
+            fresh = cur is not None and cur[1] >= self.now()
+            ok = match and fresh
             if ok:
                 self.code = None     # 한 번만
         if not ok:
-            self._fail(ip, "짝 코드 틀림", pair=True)
-            return None
+            why = "없음" if cur is None else ("만료" if not fresh else "틀림")
+            self._fail(ip, {"없음": "짝 코드 없음", "만료": "짝 코드 만료", "틀림": "짝 코드 틀림"}[why], pair=True)
+            return None, why
         self._success(ip)
         token = secrets.token_urlsafe(32)
         did = secrets.token_hex(4)
@@ -272,7 +281,7 @@ class PhoneAuth:
             self._save()
         self.record("기기 등록", ip, 기기=did)
         logger.info(f"폰 기기 등록: {did}")
-        return {"기기": did, "토큰": token, "이름": name}
+        return {"기기": did, "토큰": token, "이름": name}, ""
 
     def check(self, token, ip, what="api"):
         h = self._h(str(token or ""))
@@ -340,6 +349,16 @@ def qr_svg(text, scale=6, border=4):
 
 
 # ---------------------------------------------------------------- WebSocket 소리·메시지(운영판 폰연결 + 폰 요청 기다리기)
+# 연결하기 실패 문구(옛 폰 앱 0.1.0 은 '오류' 글을 그대로 보여 줌 — 새 앱은 '왜' 로 고름)
+PAIR_FAIL_TEXT = {
+    "틀림": "연결 코드가 PC 화면의 숫자와 달라요. 8자리를 다시 확인해 주세요.",
+    "만료": "연결 코드 시간(10분)이 지났어요. PC 화면에서 '연결 코드 만들기'를 다시 눌러 주세요.",
+    "없음": "PC 에 지금 쓸 수 있는 연결 코드가 없어요(이미 썼거나 만들지 않았어요). PC 화면에서 '연결 코드 만들기'를 눌러 주세요.",
+    "잠김": "틀린 코드가 여러 번 들어와 잠깐 막혔어요. 잠시 뒤에 다시 해 주세요.",
+    "잠김_전체": "틀린 코드가 너무 많이 들어와 연결하기를 잠깐(최대 15분) 막았어요. 조금 뒤에 다시 해 주세요.",
+}
+
+
 def make_transport(websocket, link, lead=1.5, hold=1.0):
     """pipecat FastAPI WebSocket 전송 — 소리는 폰에 최대 lead 초 앞서 보냄, 말 한 덩이 시작은 hold 초 모아서(끊김 줄이기)."""
     from pipecat.frames.frames import (InputAudioRawFrame, InterruptionFrame, OutputAudioRawFrame, OutputTransportMessageFrame,
@@ -562,7 +581,8 @@ def make_gateway_app(cfg, auth, on_ws, status):
     async def gate(request: Request, call_next):
         ip = request.client.host if request.client else ""
         if not allowed_ip(ip, ts_ok()):
-            return JSONResponse({"ok": False, "오류": "집 안 네트워크에서만 연결돼요"}, status_code=403)
+            return JSONResponse({"ok": False, "왜": "주소_거절", "오류": "집 안 네트워크에서만 연결돼요. 테일스케일로 연결하려면 PC 김비서 설정 → "
+                                 "폰 연결 → '테일스케일로도 연결 받기'를 켜 주세요."}, status_code=403)
         if request.url.path not in ("/phone/pair", "/phone/api/status"):
             return JSONResponse({"ok": False}, status_code=404)
         resp = await call_next(request)
@@ -581,12 +601,12 @@ def make_gateway_app(cfg, auth, on_ws, status):
         except (ValueError, UnicodeDecodeError):
             b = None
         if not isinstance(b, dict):
-            return JSONResponse({"ok": False, "오류": "짝 코드를 보내 주세요"}, status_code=400)
-        r = await asyncio.to_thread(auth.pair, str(b.get("code") or "")[:16], str(b.get("name") or "폰"), ip)
+            return JSONResponse({"ok": False, "오류": "연결 코드를 보내 주세요"}, status_code=400)
+        r, why = await asyncio.to_thread(auth.pair_why, str(b.get("code") or "")[:16], str(b.get("name") or "폰"), ip)
         if not r:
             left = auth.lock_left(ip)
-            return JSONResponse({"ok": False, "오류": "짝 코드가 맞지 않거나 시간이 지났어요. PC 화면에서 새 코드를 만들어 주세요.",
-                                 **({"잠금초": round(left)} if left else {})}, status_code=403)
+            msg = PAIR_FAIL_TEXT.get(why) or PAIR_FAIL_TEXT["틀림"]
+            return JSONResponse({"ok": False, "왜": why, "오류": msg, **({"잠금초": round(left)} if left else {})}, status_code=403)
         return {"ok": True, "기기": r["기기"], "토큰": r["토큰"], "이름": r["이름"], **status(r["기기"])}
 
     @app.get("/phone/api/status")
@@ -594,7 +614,7 @@ def make_gateway_app(cfg, auth, on_ws, status):
         ip = request.client.host if request.client else ""
         did = auth.check(request.headers.get(TOKEN_HEADER), ip, "상태")
         if not did:
-            return JSONResponse({"ok": False, "오류": "등록되지 않은 기기예요. 다시 짝지어 주세요."}, status_code=401)
+            return JSONResponse({"ok": False, "오류": "등록되지 않은 기기예요. 다시 연결해 주세요."}, status_code=401)
         return {"ok": True, "기기": did, **status(did)}
 
     @app.websocket("/phone/ws")

@@ -1,6 +1,6 @@
 {
  "schema": "kimbiseo-models/1",
- "note": "통역 원어민 목소리 모델(선택 — 설정 → 통역 '통역 목소리 받기'를 누를 때만 받음). models.json 과 따로 둠 — 업데이트(updater DEPS)에 걸리지 않게(앱 안 업데이트로 0.1.15 를 받아도 새 설치 없이 통역을 씀). 모두 원 저장소에서 사용자 PC 가 직접 받음(판 고정 + sha256/git_sha1). 상업 OK 만(Kokoro-82M Apache-2.0 · Piper 목소리 학습 자료 CC0/CC-BY-4.0).",
+ "note": "통역 원어민 목소리 모델(선택 — 설정 → 통역 '통역 목소리 받기'를 누를 때만 받음). models.json 과 따로 둠 — 업데이트(updater DEPS)에 걸리지 않게(앱 안 업데이트로 0.1.15 를 받아도 새 설치 없이 통역을 씀). 모두 원 저장소에서 사용자 PC 가 직접 받음(판 고정 + sha256/git_sha1). Kokoro-82M Apache-2.0 · Piper 목소리 학습 자료 CC0/CC-BY-4.0 · 태국어(0.1.17~) MrJMThaiTTS 가중치 Apache-2.0(학습 자료가 비상업 모델의 합성음이라 회색 — 사용자 PC 가 직접 받음, THIRD_PARTY_LICENSES 에 사실대로).",
  "models": [
   {
    "name": "kokoro-82m",
@@ -181,6 +181,159 @@
     }
    ],
    "note": "CC-BY-4.0 — 설정 화면·THIRD_PARTY_LICENSES 에 출처 표시. MODEL_CARD.md 를 같이 받아 둠."
+  },
+  {
+   "name": "thai-mrjm",
+   "role": "통역 원어민 목소리(태국어, Kokoro 태국어 판 'MrJMThaiTTS' — 여자 목소리 thai_som, onnxruntime) — 선택, '통역 목소리 받기'",
+   "required": false,
+   "group": "interp",
+   "license": "가중치 Apache-2.0(FireH2O/MrJMThaiTTS = awslabs/FastThaiG2P v0.3.0 Kokoro Thai 모델의 fp16 재포장). ★학습 자료 'Som TTS' 는 OmniVoice(비상업 CC-BY-NC 모델)로 만든 합성음 — 상업 사용은 회색(THIRD_PARTY_LICENSES 참조)",
+   "source": "https://huggingface.co/FireH2O/MrJMThaiTTS",
+   "revision": "3baacf2aee4081e8056cc5d11c79639013a7c5ea",
+   "base_url": "https://huggingface.co/FireH2O/MrJMThaiTTS/resolve/{revision}/",
+   "size_total": 163871461,
+   "files": [
+    {
+     "path": "LICENSE",
+     "size": 1356,
+     "git_sha1": "f102a1a6b468a99fba73a115ebd1557ecbb592d4"
+    },
+    {
+     "path": "NOTICE",
+     "size": 635,
+     "git_sha1": "7dd4f06c50c1d0c21952a6b57335135eade8c76e"
+    },
+    {
+     "path": "README.md",
+     "size": 4684,
+     "git_sha1": "8260ababa0e016842b0972c8c352bf49e74e0933"
+    },
+    {
+     "path": "config.json",
+     "size": 2516,
+     "git_sha1": "9831e746110ce01aca6fe28dfbb3aaa6212fc935"
+    },
+    {
+     "path": "kokoro_thai.fp16w.onnx",
+     "size": 163339902,
+     "sha256": "a146e80dd142456ef5885a7d44e7155b9b117a633c9810fcf62a33bb69562ba2"
+    },
+    {
+     "path": "thai_som.npy",
+     "size": 522368,
+     "sha256": "bdec2300889bd5db59c81a4f0e1604c78124abf6096d6e84d4db1bbeef122240"
+    }
+   ],
+   "note": "우리가 다시 나눠 주지 않음 — 사용자 PC 가 이 저장소의 고정 판에서 직접 받음. README.md(모델 카드)·LICENSE·NOTICE 를 같이 받아 둠."
+  },
+  {
+   "name": "fastthaig2p",
+   "role": "태국어 글자 → 발음 바꾸기(FastThaiG2P, awslabs) — 태국어 목소리(thai-mrjm)가 씀. 선택, '통역 목소리 받기'",
+   "required": false,
+   "group": "interp",
+   "license": "Apache-2.0(코드·자료 — awslabs/FastThaiG2P). 발음 사전 일부는 위키낱말사전(kaikki.org) 발음에서 뽑았고, 모자란 글자 읽기는 tltk 에서 가져온 자료(저장소 README 표기)",
+   "source": "https://github.com/awslabs/FastThaiG2P",
+   "revision": "4e82a291b4cf2876326744c6580121e9986ad354",
+   "base_url": "https://raw.githubusercontent.com/awslabs/FastThaiG2P/{revision}/",
+   "size_total": 25173913,
+   "files": [
+    {
+     "path": "LICENSE",
+     "size": 10142,
+     "git_sha1": "67db8588217f266eb561f75fae738656325deac9"
+    },
+    {
+     "path": "NOTICE",
+     "size": 67,
+     "git_sha1": "616fc5889451895dbf9768e6787c8308c33bef22"
+    },
+    {
+     "path": "data/dict.txt",
+     "size": 1520330,
+     "git_sha1": "f50733f1a649162b025bf1368090c3fdd20faf04"
+    },
+    {
+     "path": "data/fallback/PhSTrigram.sts",
+     "size": 1400502,
+     "git_sha1": "ab579efbe7a7d1ed15ca16b2bbcdc21628ab98df"
+    },
+    {
+     "path": "data/fallback/sylform_var.pkl",
+     "size": 249521,
+     "git_sha1": "9a1a95517d11ca2536cb8fce71946882f49ec2a3"
+    },
+    {
+     "path": "data/fallback/sylrule.lts",
+     "size": 3855,
+     "git_sha1": "7590d0c3339efaefa3ffb8f3a42ed4139dc6d1f8"
+    },
+    {
+     "path": "data/fallback/sylseg.3g",
+     "size": 15795689,
+     "git_sha1": "fcd7b84451d98c8a88c067985fb1788d76a3839a"
+    },
+    {
+     "path": "data/fallback/thaisyl.dict",
+     "size": 31777,
+     "git_sha1": "fde18e0a2ddd6eed1083a258497c01a6bfa41bb9"
+    },
+    {
+     "path": "data/fallback/thdict",
+     "size": 2402529,
+     "git_sha1": "e3c4ffb26bb28fc3e5a0c783509a8df6db72779d"
+    },
+    {
+     "path": "data/ipa.json",
+     "size": 3659356,
+     "git_sha1": "bcae09afe161abff35c9f9379ac23a43f15ca5ac"
+    },
+    {
+     "path": "fastthaig2p/__init__.py",
+     "size": 491,
+     "git_sha1": "48d4e9aac28ede870e5576902241a9d7f3c5c722"
+    },
+    {
+     "path": "fastthaig2p/_data.py",
+     "size": 386,
+     "git_sha1": "40cd73a60a0810ff9695ef99a06527e37f03a4c7"
+    },
+    {
+     "path": "fastthaig2p/_th2ipa.py",
+     "size": 61842,
+     "git_sha1": "22bde4e4c1b674bbc026ea729d73047877f1156d"
+    },
+    {
+     "path": "fastthaig2p/fallback.py",
+     "size": 2427,
+     "git_sha1": "225988d8e97bb93fbe02e17d64337cb096250f90"
+    },
+    {
+     "path": "fastthaig2p/g2p.py",
+     "size": 1254,
+     "git_sha1": "7603d8ea4a58ad00197011381e5db6e1fb92912c"
+    },
+    {
+     "path": "fastthaig2p/kokoro.py",
+     "size": 2099,
+     "git_sha1": "12beb4538ee67d3ab619a15de79f788f46d16e56"
+    },
+    {
+     "path": "fastthaig2p/normalizer.py",
+     "size": 18887,
+     "git_sha1": "304e080605b3b298b74d27ea903e5b32819160e3"
+    },
+    {
+     "path": "fastthaig2p/tokenizer.py",
+     "size": 717,
+     "git_sha1": "33ed2095aac01ff7b256850ac3632d4d0cd4db5f"
+    },
+    {
+     "path": "fastthaig2p/tts.py",
+     "size": 12042,
+     "git_sha1": "be036384aacd5c8440a37cba730261ec994e3cd8"
+    }
+   ],
+   "note": "파이썬 꾸러미로 깔지 않고(PyPI 에 없음) 고정 커밋의 파일만 받아 통역 목소리 프로그램이 불러 씀. 실행에 필요한 것만(코드·dict.txt·ipa.json·fallback) — 꾸러미 pythainlp 는 locks/interp-thai.json."
   }
  ]
 }

@@ -62,7 +62,9 @@ def lang_transcribe(ear, x, msg):
     probs = {cands[0]: 1.0} if len(cands) == 1 else IL.detect(ear.pipe, x, cands)
     lang, conf = IL.choose(probs, last=msg.get("last"), need=float(msg.get("need") or 0.9), fixed=msg.get("fixed"),
                            audio_sec=len(x) / 16000)
-    text = ear.pipe({"raw": x, "sampling_rate": 16000}, generate_kwargs={"language": lang, "task": "transcribe"})["text"].strip()
+    from ear import token_cap
+    text = ear.pipe({"raw": x, "sampling_rate": 16000}, generate_kwargs={"language": lang, "task": "transcribe",
+                                                                         "max_new_tokens": token_cap(len(x) / 16000)})["text"].strip()
     return text, lang, conf, probs
 
 
@@ -113,11 +115,12 @@ class InterpVoice:
                     pass
 
     def say(self, voice, text):
-        model = IL.model_of(voice)
-        if not model:
+        models = IL.models_of(voice)
+        if not models:
             raise ValueError(f"모르는 목소리 {voice}")
-        if not os.path.isdir(C.model_path(STATE["cfg"], model)):
-            raise FileNotFoundError(f"통역 목소리 모델이 없어요({model}) — 설정 → 통역 → '통역 목소리 받기'")
+        for model in models:
+            if not os.path.isdir(C.model_path(STATE["cfg"], model)):
+                raise FileNotFoundError(f"통역 목소리 모델이 없어요({model}) — 설정 → 통역 → '통역 목소리 받기'")
         with self.lock:
             for attempt in range(2):
                 if self.p is None or self.p.poll() is not None:

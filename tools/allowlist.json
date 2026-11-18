@@ -37,13 +37,13 @@
       "path": "PRIVACY.md",
       "origin": "new",
       "treatment": "new",
-      "sha256": "a7e93bd71c3e60304c713d0d540fa1ae7f99d74a95853bb83b35ad9ed0c01e0c"
+      "sha256": "041c07cd04dd216d045fbecacfadc2361523b6224a9c5b6a70b99226fec9be22"
     },
     {
       "path": "README.md",
       "origin": "new",
       "treatment": "new",
-      "sha256": "3a3638bc316ea540c17276616c99ca81bc70f4226b0f9d13614164a734ccbdbc",
+      "sha256": "eeea171df2d5f44434b9eb5b0eebb5315fde7091b08a17cde5b73d3a9137269b",
       "exceptions": [
         {
           "line": 6,
@@ -62,19 +62,19 @@
       "path": "THIRD_PARTY_LICENSES/README.md",
       "origin": "new",
       "treatment": "new",
-      "sha256": "d20b59abbac30f6e6c5de2ff91b73175ce5495e7137813069e3aa067fe363391"
+      "sha256": "d24c9701df751e08af5cfa169cbf8177af2b6b619e51b11d6d1cce391a74f2c0"
     },
     {
       "path": "android/README.md",
       "origin": "new",
       "treatment": "new",
-      "sha256": "f22b5b129f0a6d82202b542df27c793aeb5388caf65d439785d5cd3a51795646"
+      "sha256": "de3bb4b4e01ed9d7978a97f070daa27522bf3a89ce2b97727ae5cebcce73c057"
     },
     {
       "path": "android/app/build.gradle.kts",
       "origin": "new",
       "treatment": "new",
-      "sha256": "9cb171f961f7406a2c6548ead7d01962286421ee7a377723b237583a7edd4680"
+      "sha256": "18950634253b9b2a03d7b9ac80f499d3ff73b2625453404181cd80c6701ef598"
     },
     {
       "path": "android/app/src/main/AndroidManifest.xml",
@@ -92,13 +92,13 @@
       "path": "android/app/src/main/java/kr/kimbiseo/phone/Doer.kt",
       "origin": "new",
       "treatment": "new",
-      "sha256": "c3700f741c7ccbf43d45c6fab697a1dc23ef6c2c8a79557389e9ca3b797ea96c"
+      "sha256": "da750c8e6dfa4fbe50cc5f53d737ad25bf13c7d584ca4efc7cd4f1945af6f65f"
     },
     {
       "path": "android/app/src/main/java/kr/kimbiseo/phone/MainActivity.kt",
       "origin": "new",
       "treatment": "new",
-      "sha256": "4a0e31530b3aee43e56f607d6795c317296d27fdfe8d82a669b0c22f398a9ba1",
+      "sha256": "4ba8e3000880d71b0366ca8bb126ac4c68a34c3e09157e03800d8de8ab5d3f48",
       "exceptions": [
         {
           "line": null,
@@ -116,19 +116,19 @@
       "path": "android/app/src/main/java/kr/kimbiseo/phone/Net.kt",
       "origin": "new",
       "treatment": "new",
-      "sha256": "3ec4a8520beacc80b1ee610efe4f393459c02c985191c20ecf498c3b5d6c26d4"
+      "sha256": "a49ebb04335a4bead8df6d8e4e2e638bae1e525a77bbc7bd09fbd12a49608d0f"
     },
     {
       "path": "android/app/src/main/java/kr/kimbiseo/phone/Pairing.kt",
       "origin": "new",
       "treatment": "new",
-      "sha256": "6424df59815f59cf08639702cfdcfbbbe6da6bf71ca4eb1514da9de35d4d713d"
+      "sha256": "7c191069f92fa41f4ff102ee6cc50fea57ca4b234b2541c0a98d54ac5fec12a2"
     },
     {
       "path": "android/app/src/main/java/kr/kimbiseo/phone/Rules.kt",
       "origin": "derived:운영판 폰 앱 연락처·앱 이름 찾기 규칙을 고쳐 옮김",
       "treatment": "modified",
-      "sha256": "bbdb4506861d36738708418a76b32442d790d9b2c4e3cc1cf3ccd22ea046b869",
+      "sha256": "5a2a777a93d57e1ae5dbc4cbc3811154e12aa9eb7eafc769333ae190ab87a524",
       "note": "연락처 이름 너그럽게 찾기(호칭·띄어쓰기·모음 혼동)는 운영판 방식, 길안내·앱 이름은 새로",
       "exceptions": [
         {
@@ -148,13 +148,13 @@
       "path": "android/app/src/main/java/kr/kimbiseo/phone/TalkService.kt",
       "origin": "new",
       "treatment": "new",
-      "sha256": "d938bca743f3ed01bdf6e2ef0a52adeeb0b0d2d15b155b481ad6d6bdc7fb4c8d"
+      "sha256": "8ce847f58919ca9a60b83d81955f7be8f8d6ea3eaabc3ba8cea80dd33f7ba670"
     },
     {
       "path": "android/app/src/main/java/kr/kimbiseo/phone/Ui.kt",
       "origin": "new",
       "treatment": "new",
-      "sha256": "e2bfd81ee814c489396e41c2e2f7f8081bc3071aa5fe2140eb31ce3a4187702c"
+      "sha256": "fd1f196dca33529f1b9bf5b4939a306169aad0ab9986c1378f419bae2a290f0f"
     },
     {
       "path": "android/app/src/main/res/drawable/ic_fg.xml",
@@ -190,7 +190,7 @@
       "path": "android/app/src/test/java/kr/kimbiseo/phone/RulesTest.kt",
       "origin": "new",
       "treatment": "new",
-      "sha256": "2458264bdbfe24e612c09527446778f5661bd4b31038541ff3563570bbf3a160",
+      "sha256": "97106fbbc9ef83943162e256ad1ef2c0ab2cc6ba7ebeb528035bc9d4fea0704b",
       "exceptions": [
         {
           "line": null,
@@ -300,7 +300,7 @@
       "path": "app/config/choices.json",
       "origin": "new",
       "treatment": "new",
-      "sha256": "d677224a4f96c21aff97e668cc0dec65af6d420c01254865f42a50cc656c69b1",
+      "sha256": "2e97c979389db896f64b5d4d4e6cd684640bcdf3bd79ebdb380d857ac896895a",
       "note": "화면 선택지(호칭 단추·펫·목소리·두뇌·끼어들기 감도·정보) — 5단계 · 0.1.11 남자 펫 준비됨·목소리 '옷에 맞춤(자동)'",
       "exceptions": [
         {
@@ -319,7 +319,7 @@
       "path": "app/config/default.json",
       "origin": "new",
       "treatment": "new",
-      "sha256": "502265a8171c3c5c02e37fd97b798f47603a7bb1a98e404034f0761767dbd61a",
+      "sha256": "335e8354c55258f13060b8a411a2d13e56d8968eaffa058119cd785f56322f35",
       "note": "기본 설정(개인 값 없음, 실행·펫 옷 칸) — 7단계"
     },
     {
@@ -393,7 +393,7 @@
       "path": "app/core/interp.py",
       "origin": "new",
       "treatment": "new",
-      "sha256": "0096ca3f67bb6ead18ff66420100cde27388401bb122a4c3ba7fad709d6cfaed"
+      "sha256": "9d1f4adfb95f26251b7b8927a26e358c13d5c2f8a2d485701b079cbbe53167ab"
     },
     {
       "path": "app/core/keystore.py",
@@ -420,7 +420,7 @@
       "path": "app/core/phone.py",
       "origin": "new",
       "treatment": "new",
-      "sha256": "9d61d7113a0ef5a87f59ac1f342b5cc6dc7aaf405606fb1ae830a7927caf4c17",
+      "sha256": "846c7f24d4f1019e9ad60fec3f1ede9734412ec99136911f8368624ebc9b19a6",
       "exceptions": [
         {
           "line": null,
@@ -496,7 +496,7 @@
       "path": "app/core/session.py",
       "origin": "new",
       "treatment": "new",
-      "sha256": "76b5358d7883095e18a40b868d5c8334582b55a0cfdc21cc76470470feb64f1d",
+      "sha256": "3ce5496d6828188cb694d4abf6dc1eb89fd56d7a7241941b621eb9f89e96ed27",
       "note": "파이프라인 묶기·글 입력·저장"
     },
     {
@@ -505,6 +505,13 @@
       "treatment": "new",
       "sha256": "707ed5d68a921cfd9bc1b266d7f01324c2e60f41789052518e2ed08bfaa1e098",
       "note": "설정 화면 값 검사·반영 시점·열쇠 저장·두뇌 연결 시험·펫 옷 받기 — 7단계"
+    },
+    {
+      "path": "app/core/speech_gate.py",
+      "origin": "new",
+      "treatment": "new",
+      "sha256": "8d0e3010edb2d20902589091ca33b118218047463fa8be7522ab125ed2c97bc9",
+      "note": "0.1.17 말소리 문 — 무음·잡음 헛받아쓰기 막기(실레로 재측정·짧은 인사 단독 버림)"
     },
     {
       "path": "app/core/state.py",
@@ -517,7 +524,7 @@
       "path": "app/core/stt.py",
       "origin": "derived:운영판 비서 부품을 고쳐 옮김",
       "treatment": "modified",
-      "sha256": "fd2f9c96ed4a0e8ee06673d13277601b8f7f828b21a5bc600a723d1ba9fe967f",
+      "sha256": "fbe9e275319117ff39da9266caf03e5bbd2c4921c5f56b6ee5e8c6edad55d01b",
       "note": "귀 연결·메아리 판정 부분만 옮겨 고침"
     },
     {
@@ -531,7 +538,7 @@
       "path": "app/core/tts.py",
       "origin": "derived:운영판 비서 부품을 고쳐 옮김",
       "treatment": "modified",
-      "sha256": "e846965cc86339df7c07c022b487d415a69f9fab1fbf4b23ca18277cc00d38e9",
+      "sha256": "2e39a391d3d737d2c5becffe03ae163db11b25a028cf428770987d91c38ab085",
       "note": "목소리 연결 부분만 옮겨 고침"
     },
     {
@@ -600,7 +607,7 @@
       "path": "app/main.py",
       "origin": "new",
       "treatment": "new",
-      "sha256": "7ea7e3fc9b7d160422f421bae072eaf9a6fefa77c304dd7bb5870302edd540cf",
+      "sha256": "269245d46b46abc56cb675fa3d8341cf9b88b38a599eb0ca879e94c1599e85f8",
       "note": "본체 실행(serve/script/check)·펫 옷 설정 펫에 알리기·부모 PID 지켜보기 — 7단계"
     },
     {
@@ -751,7 +758,7 @@
       "path": "app/ui/interp.js",
       "origin": "new",
       "treatment": "new",
-      "sha256": "ca69c865705c59179bbb5f7143dfb72e283cf780926e6da8b17e6ca1f8710583"
+      "sha256": "9c873f28a73e5d21663f9bb7b1bdd66f222ccf8f080d57e1ff1fa1587db553fc"
     },
     {
       "path": "app/ui/petrt.js",
@@ -763,7 +770,7 @@
       "path": "app/ui/phone.js",
       "origin": "new",
       "treatment": "new",
-      "sha256": "ff041a36da9c755af90728708928390ea1919e5b00ae09653da56f109a1db5de"
+      "sha256": "53e7c3e45b559a5914d42bf53a6245937bccf85e7eed49aa8437ec96f872888f"
     },
     {
       "path": "app/ui/settings.js",
@@ -804,7 +811,7 @@
       "path": "app/version.py",
       "origin": "new",
       "treatment": "new",
-      "sha256": "992a2bdec46ff8b43cf6300dbd6625c437f23c61ada0c1a8ff1daf0cc6d89b51",
+      "sha256": "83ae0185ee4cc04feda35f705eb6491e27e71372f59de6ecdc8fb48b536d9774",
       "note": "판 번호 한 곳 — 9단계"
     },
     {
@@ -919,7 +926,7 @@
       "path": "installer/interp/models.json",
       "origin": "new",
       "treatment": "new",
-      "sha256": "b47b332c9ba2e6114bfa55690359deb89dc286df7e6fb171d3ea4141d47e038f",
+      "sha256": "d03ba3c946ae7712a825eb920cb0196311eb8dd8bf171bbd4ceddbe0ad7c2ed0",
       "note": "통역 원어민 목소리 모델 목록(Kokoro-82M·Piper 4개, 원 저장소 판·해시 고정) — models.json 과 따로(업데이트 DEPS 밖) — 0.1.15",
       "json_hash_keys": [
         "sha256",
@@ -933,6 +940,17 @@
       "treatment": "new",
       "sha256": "cb482e17a1eae0b68306235f6bed2298159572f0ce18a5735f05fdab2f25aa34",
       "note": "파이썬 부품 잠금(판·주소·sha256) — 7단계",
+      "json_hash_keys": [
+        "sha256",
+        "url"
+      ]
+    },
+    {
+      "path": "installer/locks/interp-thai.json",
+      "origin": "new",
+      "treatment": "new",
+      "sha256": "90c262adc977a6d7edc9dcb3a9664327f27a7124d073e6252aa2686c9d3a9591",
+      "note": "태국어 통역 목소리 부품 잠금(pythainlp 판·주소·sha256 — 통역 환경 runtime\\python-interp 에 더함) — 0.1.17",
       "json_hash_keys": [
         "sha256",
         "url"
@@ -1053,6 +1071,13 @@
       "note": "본체 환경 부품 — 7단계"
     },
     {
+      "path": "installer/requirements/interp-thai.txt",
+      "origin": "new",
+      "treatment": "new",
+      "sha256": "d2e532ac19cf24972004ce58aa163e2c1dc922c03956f100cfdab0ca5131597b",
+      "note": "태국어 통역 목소리 부품 목록(사람이 읽는 원본 — 잠금은 locks/interp-thai.json) — 0.1.17"
+    },
+    {
       "path": "installer/requirements/interp.txt",
       "origin": "new",
       "treatment": "new",
@@ -1083,7 +1108,7 @@
       "path": "installer/setup_core.py",
       "origin": "new",
       "treatment": "new",
-      "sha256": "8ea1db243317c7fe9e5224d231424ca2c847421705199c4b103eedf39ebc5c28",
+      "sha256": "4a3d8316aa64393ca9b049099e0dc98b72a572d19d16365f469dd1de810f5135",
       "note": "설치 본체(부품·두뇌·모델·펫·아이콘·설정, 있으면 건너뜀) — 7단계"
     },
     {
@@ -1378,7 +1403,7 @@
       "path": "tests/unit/test_interp.py",
       "origin": "new",
       "treatment": "new",
-      "sha256": "0186e541623265389880be9d4954bc8e43113db3adae68778ace2232eec48328"
+      "sha256": "5804dbfbe1c9835e5e0dd9211cdf976d0a4962caebcca7a3307dff3344db70a2"
     },
     {
       "path": "tests/unit/test_persona_voice.py",
@@ -1402,7 +1427,7 @@
       "path": "tests/unit/test_phone.py",
       "origin": "new",
       "treatment": "new",
-      "sha256": "3e48eda4692735b01cf8c1ebc316a57bdb20a1f3ec89cab72e288fd5187ef9fd",
+      "sha256": "167975d17401c3edf5105ab070992bb13c752e686237481693fd5fa07a450146",
       "exceptions": [
         {
           "line": null,
@@ -1648,14 +1673,14 @@
       "path": "voice/ear.py",
       "origin": "derived:운영판 음성 부품을 고쳐 옮김",
       "treatment": "modified",
-      "sha256": "1ba8c34ad61c6acefa9fd7677805ad306ac6c758df95b5f088e490806e3b7452",
+      "sha256": "b178e051fe2921423513183a7ca75c7a0f4a38a5f20e8e3161e6bfe5cfbfcf14",
       "note": "whisper 길만 남김·모델 경로 인자로"
     },
     {
       "path": "voice/ear_server.py",
       "origin": "derived:운영판 비서 부품을 고쳐 옮김",
       "treatment": "modified",
-      "sha256": "273c1334f7b9426e123178d87f0113e7bc2c1fd75066cee95548725ffdeff59d",
+      "sha256": "7beaedb01e592f2d968106cf9c61dd71f808d383a7124c01166e5355c596137b",
       "note": "설정 기반·공개 포트 8872·개인 학습 판 길 삭제"
     },
     {
@@ -1699,13 +1724,13 @@
       "path": "voice/interp_langs.py",
       "origin": "new",
       "treatment": "new",
-      "sha256": "79b5ba61d500300823a630774306a3ad6ed9fc64224711b9480b63b385bd4093"
+      "sha256": "313b08ce4265511483df36141c8f3f5c7fc7d2994f707da890cbd24c2a82ae66"
     },
     {
       "path": "voice/interp_voice.py",
       "origin": "new",
       "treatment": "new",
-      "sha256": "f86b90eb727d3823ec166fbb4f766b436010629aa15c39ad107a68df6bb6625e"
+      "sha256": "62ce3e41438074423a613e4fc72783d4504389ca89165b8eb05d8befcbce23d5"
     },
     {
       "path": "voice/lipsync.py",

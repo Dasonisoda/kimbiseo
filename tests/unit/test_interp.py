@@ -75,8 +75,11 @@ def test_script_lang():
 def test_voices():
     cfg = fresh_cfg()
     assert L.voice_of(cfg, "en").startswith("kokoro:") and L.voice_of(cfg, "de").startswith("piper:")
-    for code in ("th", "id", "vi"):
+    for code in ("id", "vi"):
         assert L.voice_of(cfg, code) == "", code         # 상업용 원어민 목소리 없음 → 글자만
+    assert L.voice_of(cfg, "th") == "thai:thai_som"     # 0.1.17~ 태국어 = MrJMThaiTTS
+    assert L.model_of("thai:thai_som") == "thai-mrjm" and L.models_of("thai:thai_som") == ["thai-mrjm", "fastthaig2p"]
+    assert L.models_of("kokoro:a:af_heart") == ["kokoro-82m"] and L.models_of("") == [] and L.models_of("thai:") == []
     cfg["통역"]["목소리_엔진"] = "글자만"
     assert L.voice_of(cfg, "en") == ""
     assert L.model_of("kokoro:a:af_heart") == "kokoro-82m" and L.model_of("piper:de_DE-thorsten-medium") == "piper-de_DE-thorsten-medium"
@@ -85,6 +88,19 @@ def test_voices():
     for code, info in L.DEFAULT_LANGS.items():
         if info["목소리"]:
             assert L.model_of(info["목소리"]) in have, code
+            assert set(L.models_of(info["목소리"])) <= have, code
+
+
+def test_thai_chunks():
+    sys.path.insert(0, os.path.join(ROOT, "voice"))
+    import interp_voice as IV
+    t = "สวัสดีค่ะ ไปสนามบินสุวรรณภูมิราคาเท่าไหร่คะ ประมาณสามร้อยห้าสิบบาทใช่ไหมคะ"
+    assert IV.Thai.chunks(t) == [t]
+    long = " ".join([t] * 6)
+    parts = IV.Thai.chunks(long)
+    assert len(parts) > 1 and all(len(x) <= IV.Thai.CHUNK for x in parts) and " ".join(parts) == long
+    assert IV.Thai.chunks("ก" * 250, 100) == ["ก" * 100, "ก" * 100, "ก" * 50]
+    assert IV.Thai.chunks("   ") == []
 
 
 def test_numbers():
@@ -185,6 +201,21 @@ def test_interp_address_no_think_and_400_retry():
     interp._CLIENT.clear()
 
 
+def test_compat_brain_no_think_and_extras():
+    """두뇌 = OpenAI 호환 API: 번역 요청에도 생각 끄기 + 사용자가 적은 추가 칸 — 0.1.17 홍보 캡처 시험에서 생각하는 모델이 한국어→태국어를 '빈 답'으로 냄."""
+    cfg = fresh_cfg()
+    cfg["두뇌"].update({"방식": "compat", "호환_주소": "http://127.0.0.1:9998/v1", "호환_모델": "m", "추가": {"top_k": 20, "model": "무시"}})
+    fake = FakeClient(["ห้องน้ำอยู่ที่ไหนครับ"])
+    interp._CLIENT.clear()
+    interp._CLIENT["http://127.0.0.1:9998/v1"] = fake
+    out, who, _ = asyncio.run(interp.translate(cfg, "화장실 어디예요?", "ko", "th"))
+    assert out == "ห้องน้ำอยู่ที่ไหนครับ" and who == "OpenAI 호환 API", (out, who)
+    b = fake.calls[0][1]
+    assert b["chat_template_kwargs"] == {"enable_thinking": False} and b["top_k"] == 20 and b["model"] == "m", b
+    assert "id_slot" not in b and "cache_prompt" not in b
+    interp._CLIENT.clear()
+
+
 def test_brain_choice():
     cfg = fresh_cfg()
     assert [b[0] for b in interp.brains(cfg)] == ["이 PC 의 AI"]
@@ -236,10 +267,12 @@ def test_install_lists_commercial_ok():
     base = json.load(open(os.path.join(ROOT, "installer", "models.json"), encoding="utf-8"))["models"]
     assert not [m for m in base if m.get("group") == "interp"], "통역 모델은 models.json(업데이트 DEPS) 밖에"
     assert sorted(names) == sorted(["kokoro-82m", "piper-de_DE-thorsten-medium", "piper-el_GR-rapunzelina-medium",
-                                    "piper-ru_RU-denis-medium", "piper-tr_TR-antalia-medium"]), names
+                                    "piper-ru_RU-denis-medium", "piper-tr_TR-antalia-medium", "thai-mrjm", "fastthaig2p"]), names
     for n in names:
         m = mf[n]
-        assert len(m["revision"]) == 40 and "{revision}" in m["base_url"] and m["base_url"].startswith("https://huggingface.co/")
+        # 목소리 모델은 허깅페이스 원 저장소, 태국어 글자 읽기 코드만 깃허브 원 저장소(고정 커밋 · raw)
+        home = "https://raw.githubusercontent.com/awslabs/FastThaiG2P/" if n == "fastthaig2p" else "https://huggingface.co/"
+        assert len(m["revision"]) == 40 and "{revision}" in m["base_url"] and m["base_url"].startswith(home), n
         assert not m["required"]
         for f in m["files"]:
             assert f.get("sha256") or f.get("git_sha1"), (n, f["path"])
@@ -249,7 +282,11 @@ def test_install_lists_commercial_ok():
         assert bad not in blob, bad
     lock = json.load(open(os.path.join(ROOT, "installer", "locks", "interp.json"), encoding="utf-8"))
     pk = {x["name"].lower().replace("_", "-"): x for x in lock["packages"]}
-    assert {"kokoro", "misaki", "piper-tts", "torch", "onnxruntime"} <= set(pk), set(pk)
+    assert {"kokoro", "misaki", "piper-tts", "torch", "onnxruntime", "tzdata"} <= set(pk), set(pk)
+    th = json.load(open(os.path.join(ROOT, "installer", "locks", "interp-thai.json"), encoding="utf-8"))
+    assert [x["name"] for x in th["packages"]] == ["pythainlp"] and len(th["packages"][0]["sha256"]) == 64
+    assert th["python"] == lock["python"] and th["packages"][0]["url"].startswith("https://files.pythonhosted.org/")
+    assert "회색" in mf["thai-mrjm"]["license"] and "OmniVoice" in mf["thai-mrjm"]["license"]   # 학습 자료 사실대로
     assert all(x["sha256"] and len(x["sha256"]) == 64 for x in lock["packages"])
     assert "+cpu" in pk["torch"]["version"] or "cpu" in pk["torch"]["url"], pk["torch"]["url"]
 

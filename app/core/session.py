@@ -24,7 +24,7 @@ from pipecat.processors.aggregators.llm_response_universal import LLMContextAggr
 from pipecat.turns.user_turn_strategies import UserTurnStrategies
 
 from . import config as C
-from . import prompt, turns
+from . import interp, prompt, turns
 from .audio_smooth import Ducker
 from .brain import NoBrain, make_llm, simple_text
 from .prompt import CLI_KINDS
@@ -263,6 +263,9 @@ class Session:
         st = self.state
         st.event("typed", text=text)
         st.last_typed = (text, time.time())
+        if interp.enabled(self.cfg) and interp.active(self.cfg):
+            await self._interp_text(text)    # 통역 중 글 = 말소리와 같은 규칙(번역만 · 두뇌 대화·도구로 안 넘김)
+            return True
         if st.wake and not st.always_name:
             st.set_wake(False, why="글 입력")
         if st.bot_speaking or st.thinking:
@@ -284,6 +287,40 @@ class Session:
         st.event("status", state="생각 중")
         await self.worker.queue_frame(LLMMessagesAppendFrame(messages=[{"role": "user", "content": text}], run_llm=True))
         return True
+
+    async def _interp_text(self, text):
+        """통역 중 글 입력(0.1.17): 말소리(stt._interp_turn)와 같은 규칙 — 한국어면 상대 언어로, 외국 글이면 한국어로 번역만 하고 그 언어 목소리로 읽음.
+        '통역 그만'·'영어 통역해 줘' 같은 켜기·끄기 글만 받음(글은 이 기기 사용자가 친 것). 두뇌 대화·도구로는 절대 안 넘김."""
+        st, cfg = self.state, self.cfg
+        s = interp._STATE
+        hint = s["mode"] if s["mode"] != "auto" else (s["last"] or interp.cfg_of(cfg).get("기본상대") or "en")
+        src = interp.L.script_lang(text, hint=hint)
+        cmd = interp.L.parse_command(cfg, text) if src == "ko" else None
+        if cmd and cmd[0] == "off":
+            interp.turn_off("글로 끔")
+            st.event("interp", state="off", **interp.view(cfg))
+            await self.worker.queue_frame(TTSSpeakFrame("네, 통역 마칠게요.", append_to_context=False))
+            return
+        if cmd and cmd[0] == "on":
+            code = interp.turn_on(cfg, cmd[1])
+            interp.warm_voice(cfg, code)
+            st.event("interp", state="on", **interp.view(cfg))
+            await self.worker.queue_frame(TTSSpeakFrame(f"네, {interp.L.name_of(cfg, code)}로 바꿀게요.", append_to_context=False))
+            return
+        interp.touch()
+        dst = interp.plan(cfg, src)
+        sn, dn = interp.L.name_of(cfg, src), interp.L.name_of(cfg, dst)
+        st.event("interp", state="translating", src_lang=src, dst_lang=dst, src=text, src_name=sn, dst_name=dn)
+        out, who, sec = await interp.translate(cfg, text, src, dst, interp.history())
+        if not out:
+            logger.warning(f"통역(글) 실패 {src}→{dst}: {who} ({sec:.1f}초)")
+            st.event("interp", state="error", src_lang=src, dst_lang=dst, src=text, why=who)
+            return
+        item = interp.remember(text, out, src, dst)
+        logger.info(f"통역(글) {src}→{dst} ({who} {sec:.2f}초, 원문 {len(text)}자 → {len(out)}자)")
+        st.event("interp", state="done", src_lang=src, dst_lang=dst, src=text, dst=item["dst"], money=item.get("money"),
+                 src_name=sn, dst_name=dn, sec=round(sec, 2), asr_ms=0, voice=bool(interp.L.voice_of(cfg, dst)) or dst == "ko")
+        await self.worker.queue_frame(TTSSpeakFrame(out, append_to_context=False))
 
     # ---- 도중 저장
     def _conv(self):

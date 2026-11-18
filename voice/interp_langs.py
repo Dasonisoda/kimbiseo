@@ -3,12 +3,13 @@
 #   목소리 = 통역 원어민 목소리(voice/interp_voice.py — 선택 부품 '통역 목소리 받기'):
 #     kokoro:<언어글자>:<목소리>  Kokoro-82M(Apache-2.0)
 #     piper:<목소리 이름>          Piper(학습 자료 CC0·CC-BY 인 목소리만)
-#     ""(빈 칸)                    상업용으로 쓸 수 있는 원어민 목소리가 없는 언어 — 글자만 보여 줌(태국어·인도네시아어·베트남어)
+#     thai:<목소리 묶음>            태국어(0.1.17~) — MrJMThaiTTS(Kokoro 태국어 판, 가중치 Apache-2.0 · 학습 자료는 회색) + FastThaiG2P(글자 → 발음)
+#     ""(빈 칸)                    원어민 목소리가 없는 언어 — 글자만 보여 줌(인도네시아어·베트남어)
 import re
 
 DEFAULT_LANGS = {
     "en": {"이름": "영어", "부르는말": ["영어", "영문", "잉글리시", "english"], "목소리": "kokoro:a:af_heart"},
-    "th": {"이름": "태국어", "부르는말": ["태국어", "태국말", "타이어", "태국"], "목소리": "",
+    "th": {"이름": "태국어", "부르는말": ["태국어", "태국말", "타이어", "태국"], "목소리": "thai:thai_som",
            "번역지시": "태국어는 공손한 말끝(남성 ครับ, 여성 ค่ะ)을 쓰세요. 말하는 사람의 성별을 모르면 ครับ."},
     "ja": {"이름": "일본어", "부르는말": ["일본어", "일본말", "일어", "일본"], "목소리": "kokoro:j:jf_alpha"},
     "zh": {"이름": "중국어", "부르는말": ["중국어", "중국말", "보통화", "만다린", "중국"], "목소리": "kokoro:z:zf_xiaobei",
@@ -25,7 +26,8 @@ DEFAULT_LANGS = {
 }
 KO = "ko"
 # 목소리 → 받아야 할 모델 이름(installer/interp/models.json) — 화면에서 '받은 목소리'를 보여 줄 때
-VOICE_MODEL = {"kokoro": "kokoro-82m", "piper": "piper-{}"}
+VOICE_MODEL = {"kokoro": "kokoro-82m", "piper": "piper-{}", "thai": "thai-mrjm"}
+THAI_G2P = "fastthaig2p"   # 태국어 목소리가 같이 쓰는 글자 → 발음 바꾸기(코드·사전) 모델 폴더
 
 
 def langs(cfg):
@@ -54,7 +56,17 @@ def model_of(voice):
         return VOICE_MODEL["kokoro"]
     if kind == "piper" and rest:
         return VOICE_MODEL["piper"].format(rest)
+    if kind == "thai" and rest:
+        return VOICE_MODEL["thai"]
     return ""
+
+
+def models_of(voice):
+    """목소리에 필요한 모델 폴더 전부(태국어 = 목소리 + 글자 → 발음). 모르면 []."""
+    m = model_of(voice)
+    if not m:
+        return []
+    return [m, THAI_G2P] if m == VOICE_MODEL["thai"] else [m]
 
 
 def whisper_codes(codes):

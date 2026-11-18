@@ -17,6 +17,11 @@ SR = 16000
 DEFAULT_MODEL = "openai/whisper-large-v3-turbo"
 
 
+def token_cap(sec):
+    """받아쓰기 글 토큰 상한 — 1초에 12토큰(빠른 한국어 말도 넉넉) + 24, 위스퍼 최대 440."""
+    return int(max(24, min(440, 24 + 12 * float(sec))))
+
+
 @dataclass
 class ListenState:
     chunk_samples: int
@@ -55,8 +60,8 @@ class Ear:
     def transcribe(self, wav16k, max_new_tokens=None, prompt_ids=None):
         wav = _f32(wav16k)
         kw = {"language": self.language}
-        if max_new_tokens:
-            kw["max_new_tokens"] = int(max_new_tokens)
+        # 조용한·짧은 조각에서 위스퍼가 같은 말을 수백 자 되풀이하며(실기: 0.8초 조각 → 64초·443자) 귀를 막는 일 → 소리 길이에 맞춘 상한
+        kw["max_new_tokens"] = int(max_new_tokens) if max_new_tokens else token_cap(len(wav) / SR)
         if prompt_ids is not None:
             kw["prompt_ids"] = prompt_ids
         return self.pipe({"raw": wav, "sampling_rate": SR}, generate_kwargs=kw)["text"].strip()

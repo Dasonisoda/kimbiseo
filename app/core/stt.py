@@ -35,6 +35,7 @@ from .voice_link import EarLink
 
 NAME_ONLY_WAIT = 0.7   # 이름만 부른 뒤 이어 말하는지 기다리는 초
 from .wake import hallucination as name_hallucination
+from .speech_gate import SpeechGate
 
 
 class EarSTT(SegmentedSTTService):
@@ -53,6 +54,7 @@ class EarSTT(SegmentedSTTService):
         self._peek_task = None
         self.corr_need = float(self.cfg["대화"].get("메아리_상관_기준", 0.9))
         self.vp = voiceprint     # core/voiceprint.VoicePrint — '등록한 목소리만 명령 받기'(켰을 때만 씀)
+        self.gate = SpeechGate(self.cfg)   # 말소리 문(무음·잡음 헛받아쓰기 막기) — core/speech_gate
 
     def _spk_start(self, audio):
         """등록한 목소리 문이 켜져 있으면 받아쓰기와 같이 목소리 점수를 계산(기다리는 시간 안 늘림)."""
@@ -228,6 +230,19 @@ class EarSTT(SegmentedSTTService):
             meta = {"echo_window": self.state.in_echo_window(t_start),
                     "bot_speaking": self.state.bot_spoke_between(t_start, now), "t_stop": now, "t_start": t_start}
         st = self.state
+        try:
+            gm = await asyncio.to_thread(self.gate.measure, audio, 0.3)
+        except Exception as ex:  # noqa: BLE001 — 문이 고장 나도 받아쓰기는 계속
+            logger.warning(f"말소리 문 재기 실패: {ex}")
+            gm = None
+        if gm is not None:
+            why = self.gate.before(gm)
+            self.gate.save(audio, gm, "버림" if why else "")
+            if why:
+                logger.info(f"말소리 문: 위스퍼 전 버림 — {why} {gm}")
+                st.event("asr", text="(잡음)", verdict="noise", asr_ms=0)
+                st.event("unduck")
+                return
         if self._interp_on():
             async for f in self._interp_turn(audio, meta):
                 yield f
@@ -254,6 +269,12 @@ class EarSTT(SegmentedSTTService):
             return
         await self.stop_processing_metrics()
         text = (r.get("text") or "").strip()
+        why = self.gate.after(text, gm) if gm is not None else ""
+        logger.info(f"말소리 문: {gm} → {len(text)}자" + (f" · 버림 — {why}" if why else ""))
+        if why:
+            st.event("asr", text="(잡음)", verdict="noise", asr_ms=round(r["sec"] * 1000))
+            st.event("unduck")
+            return
         if is_repeat_junk(text, r.get("audio_sec")):
             logger.info(f"받아쓰기 반복 환각 버림({r.get('audio_sec', 0):.1f}초, {len(text)}자)")
             st.event("asr", text="(잡음)", verdict="noise", asr_ms=round(r["sec"] * 1000))

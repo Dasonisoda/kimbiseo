@@ -135,7 +135,7 @@ class TalkService : Service() {
 
     private fun connect() {
         val pc = Store.pc(this)
-        if (pc == null) { Bus.line("sys", "먼저 PC 와 짝지어 주세요."); finish(null); return }
+        if (pc == null) { Bus.line("sys", "먼저 PC 와 연결해 주세요."); finish(null); return }
         Bus.post(Bus.Ev.State(false, "연결 중", micOn))
         val http = Net.client(pc.fp, ws = true).first
         tryHost(pc, http, 0, ++gen)
@@ -143,7 +143,7 @@ class TalkService : Service() {
 
     private fun tryHost(pc: Store.Pc, http: okhttp3.OkHttpClient, i: Int, g: Int) {
         if (g != gen) return
-        if (i >= pc.hosts.size) { lost(null, "PC 에 연결하지 못했어요. 같은 와이파이인지, PC 의 김비서가 켜져 있고 '폰 연결'이 켜져 있는지 확인해 주세요."); return }
+        if (i >= pc.hosts.size) { lost(null, Net.unreachable(pc.hosts)); return }
         val host = pc.hosts[i]
         var opened = false
         val req = Request.Builder().url(PairRules.baseUrl(host, pc.port, ws = true) + "/phone/ws").build()
@@ -164,7 +164,7 @@ class TalkService : Service() {
                 ctl.post {
                     if (g != gen) return@post
                     if (!opened) {
-                        if (t is javax.net.ssl.SSLException) { lost(null, "PC 인증서가 짝지을 때와 달라요. PC 를 바꿨다면 다시 짝지어 주세요."); return@post }
+                        if (t is javax.net.ssl.SSLException) { lost(null, "PC 인증서가 연결할 때와 달라요. PC 를 바꿨다면 다시 연결해 주세요."); return@post }
                         tryHost(pc, http, i + 1, g)
                     } else closed(-1)
                 }
@@ -185,8 +185,8 @@ class TalkService : Service() {
         stopAudio()
         when {
             userStop -> finish(null)
-            code == 4401 -> { Store.clear(this); finish("이 폰의 짝이 PC 에서 지워졌어요. 다시 짝지어 주세요.") }
-            code == 4403 -> finish("PC 가 이 연결을 받지 않아요(집 안 네트워크가 아니거나 테일스케일이 꺼져 있음).")
+            code == 4401 -> { Store.clear(this); finish("이 폰의 연결이 PC 에서 지워졌어요. 다시 연결해 주세요.") }
+            code == 4403 -> finish("PC 가 이 연결을 받지 않아요. 집 밖이라면 PC 김비서 설정 → 폰 연결 → '테일스케일로도 연결 받기'가 켜져 있는지 확인해 주세요.")
             was && retry < 3 -> {
                 retry++
                 if (retry == 1) Bus.line("sys", "PC 연결이 끊겨 다시 연결하는 중")
@@ -215,7 +215,7 @@ class TalkService : Service() {
                 startAudio()
                 send(JSONObject().put("type", "interp_get"))
             }
-            "auth_fail" -> { userStop = true; Store.clear(this); Bus.line("sys", "이 폰의 짝이 PC 에서 지워졌어요. 다시 짝지어 주세요.") }
+            "auth_fail" -> { userStop = true; Store.clear(this); Bus.line("sys", "이 폰의 연결이 PC 에서 지워졌어요. 다시 연결해 주세요.") }
             "status" -> { val s = m.optString("state"); if (s.isNotEmpty()) Bus.post(Bus.Ev.State(true, s, micOn)) }
             "user", "typed" -> m.optString("text").takeIf { it.isNotBlank() }?.let { Bus.line("me", it) }
             "bot" -> m.optString("text").takeIf { it.isNotBlank() }?.let { Bus.line("bot", it) }

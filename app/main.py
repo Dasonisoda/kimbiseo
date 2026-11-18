@@ -787,9 +787,9 @@ def make_app():
         langs = []
         for code, info in interp.L.langs(CFG).items():
             v = str(info.get("목소리") or "")
-            m = interp.L.model_of(v)
+            ms = interp.L.models_of(v)
             langs.append({"코드": code, "이름": info.get("이름") or code, "목소리": bool(v),
-                          "받음": bool(m and os.path.isdir(os.path.join(root, m)))})
+                          "받음": bool(ms) and all(os.path.isdir(os.path.join(root, m)) for m in ms)})
         st = {}
         try:
             with open(interp_status, encoding="utf-8") as f:
