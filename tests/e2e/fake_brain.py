@@ -76,6 +76,12 @@ def decide(messages, tools):
             return ("text", f"계산해 보니 {m.group(1) if m else '?'}이에요.")
         if "저장" in r or "이미있음" in r:
             return ("text", "네, 기억할게요.")
+        if '"취소"' in r:
+            return ("text", "네, 실행하지 않았어요.")
+        if '"폰"' in r or "폰에서" in r:
+            return ("text", "폰에서 열었어요." if '"됨": true' in r else "폰에서 열지 못했어요.")
+        if '"열림"' in r or "검색" in r or '"시험"' in r:
+            return ("text", "PC에서 열었어요.")
         if "찾음" in r or "지식" in r or "대화" in r:
             return ("text", "기억을 찾아봤어요. " + re.sub(r"[{}\[\]\"]", " ", r)[:80].strip())
         return ("text", "확인했어요.")
@@ -84,6 +90,19 @@ def decide(messages, tools):
     if A is not None and A.loop_tools and "calc" in names:     # 도구 폭주 흉내: 도구를 줄 때마다 다른 계산을 또 부름
         n = sum(1 for m in messages if m.get("role") == "tool")
         return ("tool", "calc", {"expression": f"{n}+1"})
+    if ("가는 길" in u or "길 안내" in u or "길안내" in u) and "phone_action" in names:     # 폰 대화에만 붙는 폰 도구
+        dest = re.sub(r"\s*(까지|으로|로)?\s*(가는 길|길 ?안내).*$", "", u).strip() or "강남역"
+        app = next((a for a in ("카카오맵", "네이버지도", "티맵", "구글지도", "카카오내비") if a in u), "")
+        return ("tool", "phone_action", {"action": "navigate", "destination": dest[:30], "app": app})
+    if "전화" in u and "phone_action" in names:
+        num = re.sub(r"\D", "", u)
+        return ("tool", "phone_action", {"action": "dial", **({"number": num} if len(num) >= 3 else {"contact": u.split()[0].rstrip("한테에게")})})
+    if "폰에서" in u and "열어" in u and "phone_action" in names:
+        return ("tool", "phone_action", {"action": "open_app", "app": re.sub(r"(폰에서|열어 ?줘?|\s)", "", u)[:20] or "유튜브"})
+    if "검색" in u and "pc_action" in names:                      # 폰으로 말해도 PC 조작
+        return ("tool", "pc_action", {"action": "search", "query": re.sub(r"\s*(검색해 ?줘?|검색)\s*", " ", u).strip()[:40]})
+    if "전부 잊어" in u and "forget" in names:                   # 위험한 도구(전부 지우기) → 확인 단추
+        return ("tool", "forget", {"what": u.replace("전부 잊어 줘", "").strip()[:40] or "시험", "all": True})
     if "잊어" in u and "forget" in names:                       # 불리언을 글자 'False' 로 보내는 버릇 흉내
         return ("tool", "forget", {"what": u.replace("잊어 줘", "").strip()[:40], "all": "False"})
     if "날씨" in u and "get_weather" in names:

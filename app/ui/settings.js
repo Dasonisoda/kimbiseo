@@ -2,7 +2,7 @@
 "use strict";
 const Settings = {
   tab: "name",
-  tabs: [["name", "이름·호칭"], ["pet", "펫"], ["brain", "두뇌"], ["voice", "목소리"], ["mic", "마이크·스피커"], ["talk", "대화"], ["interp", "통역"], ["about", "정보"]],
+  tabs: [["name", "이름·호칭"], ["pet", "펫"], ["brain", "두뇌"], ["voice", "목소리"], ["mic", "마이크·스피커"], ["talk", "대화"], ["interp", "통역"], ["phone", "폰 연결"], ["myvoice", "내 목소리"], ["about", "정보"]],
 
   async render() {
     await loadSettings().catch(() => {});
@@ -19,6 +19,7 @@ const Settings = {
     const card = h("section", {class: "card", id: "set-card", "data-tab": this.tab});
     v.appendChild(card);
     if (this.stopMic) { this.stopMic(); this.stopMic = null; }
+    Phone.stop(); MyVoice.stop();
     this["t_" + this.tab](card);
   },
 
@@ -363,6 +364,10 @@ const Settings = {
 
   // 통역(interp.js)
   t_interp(card) { Interp.settings(card); },
+
+  // 폰 연결·내 목소리(phone.js)
+  t_phone(card) { Phone.settings(card); },
+  t_myvoice(card) { MyVoice.settings(card); },
 
   // 정보
   t_about(card) {

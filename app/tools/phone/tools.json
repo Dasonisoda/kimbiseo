@@ -1,0 +1,25 @@
+{
+ "묶음": "phone",
+ "설명": "폰 앱으로 대화할 때만 붙는 도구 — 폰에서 길안내·전화/문자 화면·다른 앱 열기(실제 통화·보내기는 사용자가 폰에서 누름)",
+ "도구": [
+  {
+   "type": "function",
+   "function": {
+    "name": "phone_action",
+    "description": "사용자 폰에서 일을 한다(폰 앱으로 대화할 때만). navigate=길안내 앱으로 목적지 열기('강남역 가는 길 안내해 줘'), dial=전화 앱에 번호를 채워 열기('엄마한테 전화해 줘' — 걸기 버튼은 사용자가 누름), sms=문자 앱에 받는 사람·내용을 채워 열기(보내기 버튼은 사용자가 누름), open_app=폰에 깔린 앱 열기('유튜브 열어 줘'). 이 컴퓨터(PC)에서 여는 것은 pc_action 이다.",
+    "parameters": {
+     "type": "object",
+     "properties": {
+      "action": {"type": "string", "enum": ["navigate", "dial", "sms", "open_app"], "description": "할 일"},
+      "destination": {"type": "string", "description": "navigate: 목적지 이름이나 주소(예: '강남역', '부산 해운대 해수욕장')"},
+      "app": {"type": "string", "description": "navigate: 길안내 앱(카카오맵·네이버지도·티맵·구글지도·카카오내비, 말하지 않으면 비움) / open_app: 열 앱 이름"},
+      "contact": {"type": "string", "description": "dial·sms: 연락처 이름(예: '엄마', '김철수')"},
+      "number": {"type": "string", "description": "dial·sms: 전화번호(사용자가 번호를 직접 말했을 때만)"},
+      "message": {"type": "string", "description": "sms: 문자 내용(사용자가 말한 그대로)"}
+     },
+     "required": ["action"]
+    }
+   }
+  }
+ ]
+}

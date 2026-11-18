@@ -29,7 +29,7 @@
 | Whisper small | Apache-2.0 (모델 카드 표시) | huggingface.co/openai/whisper-small | 받아쓰기(그래픽카드 없음) |
 | Qwen3-TTS-12Hz-0.6B-Base | Apache-2.0 | huggingface.co/Qwen/Qwen3-TTS-12Hz-0.6B-Base | 김비서 목소리 |
 | Qwen3-TTS-12Hz-0.6B-Base GGUF·ONNX 변환본 (라데온 판) | Apache-2.0 (원 모델과 같음 · 변환 = 형식 바꾸기·양자화만, 고지 NOTICE 같이 올림) | 원 모델 huggingface.co/Qwen/Qwen3-TTS-12Hz-0.6B-Base 를 변환 도구 HaujetZhao/Qwen3-TTS-GGUF(MIT)로 바꿔 **김비서 저장소 릴리스 첨부로 올림**(`installer/radeon/models.json`, sha256 고정) — 위 '다시 나눠 주지 않음'의 예외(공식 변환본이 없어서) | 라데온 판 김비서 목소리 |
-| TitaNet small (sherpa-onnx 변환판) | sherpa-onnx = Apache-2.0 · 원 모델(NVIDIA NeMo TitaNet) 조건은 NVIDIA 표시를 따름 | github.com/k2-fsa/sherpa-onnx 릴리스(자산 고정·sha256) | 목소리 닮음 검사(기본 꺼짐) |
+| TitaNet small (sherpa-onnx 변환판) | Apache-2.0 — NVIDIA NGC 모델 카드(nvidia/nemo/titanet_small): "License to use this model is covered by the license of the NeMo Toolkit" = NeMo 저장소 Apache-2.0 · 변환(ONNX)은 sherpa-onnx(Apache-2.0) | github.com/k2-fsa/sherpa-onnx 릴리스(자산 고정·sha256) | 내 목소리 등록·등록한 목소리만 명령 받기(선택 — 설정 → 내 목소리 '확인 모델 받기'를 누를 때만 받음, 이 PC 안에서만 돌림) |
 | 윈도우 기본 음성(SAPI) | 윈도우 라이선스 | 윈도우에 들어 있음 | 예비 목소리 |
 | Kokoro-82M (목소리 af_heart·jf_alpha·zf_xiaobei·ef_dora·ff_siwis·if_sara) | Apache-2.0 (모델·목소리) | huggingface.co/hexgrad/Kokoro-82M (판·sha256 = `installer/interp/models.json`) | 통역 원어민 목소리 — 영어·일본어·중국어·스페인어·프랑스어·이탈리아어(선택) |
 | Piper 목소리 de_DE-thorsten-medium | 학습 자료 CC0 (Thorsten-Voice) · 저장소 MIT | huggingface.co/rhasspy/piper-voices (판 고정, MODEL_CARD 같이 받음) | 통역 — 독일어(선택) |
@@ -39,6 +39,23 @@
 
 통역 목소리는 모두 **합성(기계) 목소리**입니다. 듣는 사람이 사람 목소리로 오해할 수 있는 곳에서는 합성 목소리라고 알려 주세요(목소리 제작자 요청).
 태국어·인도네시아어·베트남어는 상업용으로 쓸 수 있는 원어민 목소리(모델·학습 자료 둘 다)가 없어 글자로만 보여 줍니다(비영리 조건의 MMS·Piper th 등은 쓰지 않음).
+
+## 김비서 코드 안에 넣은 남의 코드
+
+| 부품 | 라이선스 | 자리 | 쓰는 곳 |
+|---|---|---|---|
+| QR Code generator library (Python) — Project Nayuki | MIT (원문은 파일 머리에 그대로) | `app/core/qrcodegen.py` | 폰 짝짓기 QR(설정 → 폰 연결) |
+
+## 폰 앱(android/) 이 쓰는 부품
+
+폰 앱 APK 를 만들 때 gradle 이 Maven Central·Google Maven 에서 받아 앱 안에 넣는 부품입니다(라이선스 원문은 각 부품 안).
+
+| 부품 | 판 | 라이선스 |
+|---|---|---|
+| OkHttp · Okio (Square) | 4.12.0 | Apache-2.0 |
+| ZXing Android Embedded (journeyapps) · ZXing core | 4.3.0 · 3.4.1 | Apache-2.0 |
+| Kotlin 표준 라이브러리 (JetBrains) | 1.9.24 | Apache-2.0 |
+| AndroidX (zxing-android-embedded 가 끌어오는 것) | — | Apache-2.0 |
 
 ## 미디어 라이브러리 (LGPL/GPL 주의)
 

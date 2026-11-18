@@ -16,6 +16,9 @@
 - `unit/test_settings.py` — 설정 화면 단위 시험(값 검사·반영 시점·끼어들기 감도·사양 추천). `python -m tests.unit.test_settings`
 - `unit/test_voice_gender.py` — 성별→목소리 단위 시험(자동 연결·직접 고정·자산 없음 대체·voices.json 보존). `python -m tests.unit.test_voice_gender`
 - `unit/test_voice_outfit.py` — 옷→목소리 단위 시험(입은 옷으로 고르기·'옷에 맞춤(자동)' 설정·모르는 목소리는 기본으로·펫에 옷 묻기). `python -m tests.unit.test_voice_outfit`
+- `unit/test_phone.py` — 폰 연결 단위 시험(사설 주소만·짝 코드 10분 한 번·틀리면 잠금·QR·자체 인증서·관문 TLS/짝짓기/WS·지운 기기 거절·폰 도구·'실행할까요?' 겉싸개). 시험 설치 파이썬으로 파일 경로로 실행
+- `unit/test_voiceprint.py` — 내 목소리 등록 단위 시험(특징·등록 규칙·남의 목소리 무시·통역 중엔 켜기/끄기만 가림). 진짜 모델 시험은 환경변수 `KIMBISEO_TITANET`(모델 파일)·`KIMBISEO_VOICE_WAVS`(a_*·b_* 16kHz wav 폴더)
+- `android/app/src/test` — 폰 앱 규칙 단위 시험(QR 읽기·주소·인증서 지문·길안내 주소·연락처 이름·앱 이름). `python android/build_apk.py --unit`
 - `e2e/fake_brain.py` — 가짜 두뇌(OpenAI 꼴 + llama-server 꼴 `/apply-template`·`/tokenize`). 규칙으로만 답함.
   `--text-tools`(도구 호출을 글로 씀) · `--trip N`(캐시 오염 흉내) · `--require-key 환경변수`(바깥 두뇌 흉내, 열쇠 값은 기록 안 함)
 - `e2e/fake_pet.py` — 본체가 펫에 보내는 신호를 받아 기록만 하는 가짜 펫

@@ -78,7 +78,11 @@ class Session:
         cfg, st = self.cfg, self.state
         dc = cfg["대화"]
         turns.WIDE.update(dict(dc.get("말끝_넓게") or {}))
-        specs, handlers = load_packs(cfg)
+        link = self.opts.get("phone")          # 폰 앱으로 대화(core/phone.PhoneLink) — 폰 도구 묶음을 더 붙임
+        if link is not None:                   # 폰은 앱의 마이크 단추가 부르는 몫 — 이름을 불러야 대답하는 모드는 끔
+            st.always_name = False
+            st.set_wake(False, why="폰 대화")
+        specs, handlers = load_packs(cfg, extra=("phone",) if link is not None else (), phone=link is not None)
         self.cli = str(cfg["두뇌"].get("방식") or "") in CLI_KINDS
         if self.cli and not cfg["두뇌"].get("구독_도구", True):
             # 구독 두뇌는 그 프로그램 자체의 도구·파일 권한은 늘 끔. 김비서 도구(날씨·계산·기억 등)는 글 약속
@@ -100,9 +104,13 @@ class Session:
             logger.warning(f"두뇌를 만들 수 없음: {ex}")
             st.event("brain_error", reason=str(ex)[:200])
             self.llm = NoBrain(str(ex))
-        self.tool_guard = register(self.llm, specs, handlers,
-                                   ToolContext(st, cfg, self.memory, actions={"save_settings": self.save_settings}))
-        stt = EarSTT(st, cfg["포트"]["귀"], ear=self.ear)
+        acts = {"save_settings": self.save_settings}
+        if link is not None:
+            acts.update(phone=link, confirm=link.confirm)      # 위험한 도구의 '실행할까요?' = 폰 화면 단추
+        elif self.opts.get("confirm") is not None:
+            acts["confirm"] = self.opts["confirm"]             # PC 창의 확인 단추
+        self.tool_guard = register(self.llm, specs, handlers, ToolContext(st, cfg, self.memory, actions=acts))
+        stt = EarSTT(st, cfg["포트"]["귀"], ear=self.ear, voiceprint=self.opts.get("voiceprint"))
         tts = VoiceTTS(st, voice=self.voice)
         self._tts = tts
         self._stt = stt
@@ -157,7 +165,7 @@ class Session:
             done.append("말 빠르기")
         if "목소리.문장_쉼_초" in keys:
             done.append("문장 사이 쉼")       # 목소리 부품이 문장마다 설정을 다시 읽음(tts.VoiceTTS.run_tts)
-        if "대화.이름부르기" in keys:
+        if "대화.이름부르기" in keys and self.opts.get("phone") is None:     # 폰 대화는 마이크 단추로 부르므로 이름 부르기 안 씀
             st.always_name = bool((cfg.get("대화") or {}).get("이름부르기", False))
             st.set_wake(st.always_name, why="설정")
             done.append("이름 부르기")

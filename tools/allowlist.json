@@ -12,7 +12,7 @@
       "path": ".gitignore",
       "origin": "new",
       "treatment": "new",
-      "sha256": "28411320f60829ce97073535c8b4f4d60359e1f064bde859af5b337e784adfe3"
+      "sha256": "c053a1b1cbc354f7f9865b39d6d6346a3fd20d0c74bd7294181ab6b0d6ec386b"
     },
     {
       "path": "ASSETS-LICENSE.md",
@@ -37,13 +37,13 @@
       "path": "PRIVACY.md",
       "origin": "new",
       "treatment": "new",
-      "sha256": "ba02e50d068f31ca8c2e6e308fdd35728e1072f0446c351559f00bd5088c5a08"
+      "sha256": "a7e93bd71c3e60304c713d0d540fa1ae7f99d74a95853bb83b35ad9ed0c01e0c"
     },
     {
       "path": "README.md",
       "origin": "new",
       "treatment": "new",
-      "sha256": "6706a99064518bfcfb490f5e62d7f69ef4b466f264bddb6a3e6ac428f76aa9bc",
+      "sha256": "3a3638bc316ea540c17276616c99ca81bc70f4226b0f9d13614164a734ccbdbc",
       "exceptions": [
         {
           "line": 6,
@@ -56,25 +56,238 @@
       "path": "SECURITY.md",
       "origin": "new",
       "treatment": "new",
-      "sha256": "f3fde1df35935ee04dd617585f74a786f17607a37c8110073887cedfc8dee121"
+      "sha256": "b2fa6e3a32813fd851e9ddd48ed7713b5e269bd97b7ba5ec1aaaf3f438d4ad57"
     },
     {
       "path": "THIRD_PARTY_LICENSES/README.md",
       "origin": "new",
       "treatment": "new",
-      "sha256": "c3781c2f837666833757b7a1f2402b68363d007c980c66f3c2983f04f382f410"
+      "sha256": "d20b59abbac30f6e6c5de2ff91b73175ce5495e7137813069e3aa067fe363391"
     },
     {
       "path": "android/README.md",
       "origin": "new",
       "treatment": "new",
-      "sha256": "d8793a68e79c335e13216cd8d7e10ec1d0b7253b5130b4988f0d9bd825ba6c33"
+      "sha256": "f22b5b129f0a6d82202b542df27c793aeb5388caf65d439785d5cd3a51795646"
+    },
+    {
+      "path": "android/app/build.gradle.kts",
+      "origin": "new",
+      "treatment": "new",
+      "sha256": "9cb171f961f7406a2c6548ead7d01962286421ee7a377723b237583a7edd4680"
+    },
+    {
+      "path": "android/app/src/main/AndroidManifest.xml",
+      "origin": "new",
+      "treatment": "new",
+      "sha256": "df96b568e559fd415a23a1a7fd74ae4028766850d848978a703c00d34ee1c894"
+    },
+    {
+      "path": "android/app/src/main/java/kr/kimbiseo/phone/Bus.kt",
+      "origin": "new",
+      "treatment": "new",
+      "sha256": "f9a2bb7e104cdb6a25e29627c0b479b9454b3165e84c72ad887c064d3516b426"
+    },
+    {
+      "path": "android/app/src/main/java/kr/kimbiseo/phone/Doer.kt",
+      "origin": "new",
+      "treatment": "new",
+      "sha256": "c3700f741c7ccbf43d45c6fab697a1dc23ef6c2c8a79557389e9ca3b797ea96c"
+    },
+    {
+      "path": "android/app/src/main/java/kr/kimbiseo/phone/MainActivity.kt",
+      "origin": "new",
+      "treatment": "new",
+      "sha256": "4a0e31530b3aee43e56f607d6795c317296d27fdfe8d82a669b0c22f398a9ba1",
+      "exceptions": [
+        {
+          "line": null,
+          "allow": "192.168.1.23",
+          "reason": "시험·안내용으로 지어낸 사설·테일스케일 주소 예시(누구의 주소도 아님)"
+        },
+        {
+          "line": null,
+          "allow": "하이라이프PC",
+          "reason": "설정 화면 아래 제작 표기 한 줄(남기기로 결정됨)"
+        }
+      ]
+    },
+    {
+      "path": "android/app/src/main/java/kr/kimbiseo/phone/Net.kt",
+      "origin": "new",
+      "treatment": "new",
+      "sha256": "3ec4a8520beacc80b1ee610efe4f393459c02c985191c20ecf498c3b5d6c26d4"
+    },
+    {
+      "path": "android/app/src/main/java/kr/kimbiseo/phone/Pairing.kt",
+      "origin": "new",
+      "treatment": "new",
+      "sha256": "6424df59815f59cf08639702cfdcfbbbe6da6bf71ca4eb1514da9de35d4d713d"
+    },
+    {
+      "path": "android/app/src/main/java/kr/kimbiseo/phone/Rules.kt",
+      "origin": "derived:운영판 폰 앱 연락처·앱 이름 찾기 규칙을 고쳐 옮김",
+      "treatment": "modified",
+      "sha256": "bbdb4506861d36738708418a76b32442d790d9b2c4e3cc1cf3ccd22ea046b869",
+      "note": "연락처 이름 너그럽게 찾기(호칭·띄어쓰기·모음 혼동)는 운영판 방식, 길안내·앱 이름은 새로",
+      "exceptions": [
+        {
+          "line": null,
+          "allow": "대표님",
+          "reason": "연락처 이름에서 떼어 내는 일반 호칭 목록 중 하나(사람을 가리키지 않음)"
+        }
+      ]
+    },
+    {
+      "path": "android/app/src/main/java/kr/kimbiseo/phone/Store.kt",
+      "origin": "new",
+      "treatment": "new",
+      "sha256": "4a99ef7116215b513cdb0fe9aebd27e502aa5ebbe3f9f94a9280ecd41498318e"
+    },
+    {
+      "path": "android/app/src/main/java/kr/kimbiseo/phone/TalkService.kt",
+      "origin": "new",
+      "treatment": "new",
+      "sha256": "d938bca743f3ed01bdf6e2ef0a52adeeb0b0d2d15b155b481ad6d6bdc7fb4c8d"
+    },
+    {
+      "path": "android/app/src/main/java/kr/kimbiseo/phone/Ui.kt",
+      "origin": "new",
+      "treatment": "new",
+      "sha256": "e2bfd81ee814c489396e41c2e2f7f8081bc3071aa5fe2140eb31ce3a4187702c"
+    },
+    {
+      "path": "android/app/src/main/res/drawable/ic_fg.xml",
+      "origin": "new",
+      "treatment": "new",
+      "sha256": "002ea3d57f0e5456f9ca45e8be532dce4060dac4460edc288f44e6cf2959a264"
+    },
+    {
+      "path": "android/app/src/main/res/drawable/ic_note.xml",
+      "origin": "new",
+      "treatment": "new",
+      "sha256": "fd52d23b5bf7223f8e87de474f6c01a54462aa2ce4c388852b72e8e0ffefd2b2"
+    },
+    {
+      "path": "android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml",
+      "origin": "new",
+      "treatment": "new",
+      "sha256": "427a6673cd34ca06c68569b499cf5ad7af18f6ebc9b23f26d6422b13fd3c8eb9"
+    },
+    {
+      "path": "android/app/src/main/res/values/colors.xml",
+      "origin": "new",
+      "treatment": "new",
+      "sha256": "6db5f632e0970a64d3a9c97dfcfbdc65b534bc099bfbf6f6d6ef7fe05f45994e"
+    },
+    {
+      "path": "android/app/src/main/res/xml/network_security.xml",
+      "origin": "new",
+      "treatment": "new",
+      "sha256": "3d5d23fb0232ea1f157f78d7b46c7d244eba3e0d8fcb91fe91020634348f98f8"
+    },
+    {
+      "path": "android/app/src/test/java/kr/kimbiseo/phone/RulesTest.kt",
+      "origin": "new",
+      "treatment": "new",
+      "sha256": "2458264bdbfe24e612c09527446778f5661bd4b31038541ff3563570bbf3a160",
+      "exceptions": [
+        {
+          "line": null,
+          "allow": "10.0.0.5",
+          "reason": "시험·안내용으로 지어낸 사설·테일스케일 주소 예시(누구의 주소도 아님)"
+        },
+        {
+          "line": null,
+          "allow": "100.101.1.2",
+          "reason": "시험·안내용으로 지어낸 사설·테일스케일 주소 예시(누구의 주소도 아님)"
+        },
+        {
+          "line": null,
+          "allow": "172.20.1.1",
+          "reason": "시험·안내용으로 지어낸 사설·테일스케일 주소 예시(누구의 주소도 아님)"
+        },
+        {
+          "line": null,
+          "allow": "172.32.0.1",
+          "reason": "시험·안내용으로 지어낸 사설·테일스케일 주소 예시(누구의 주소도 아님)"
+        },
+        {
+          "line": null,
+          "allow": "192.168.1.23",
+          "reason": "시험·안내용으로 지어낸 사설·테일스케일 주소 예시(누구의 주소도 아님)"
+        },
+        {
+          "line": null,
+          "allow": "192.168.1.300",
+          "reason": "시험·안내용으로 지어낸 사설·테일스케일 주소 예시(누구의 주소도 아님)"
+        },
+        {
+          "line": null,
+          "allow": "fd7a:115c:a1e0::1",
+          "reason": "시험·안내용으로 지어낸 사설·테일스케일 주소 예시(누구의 주소도 아님)"
+        },
+        {
+          "line": null,
+          "allow": "+82 10-1234-4444",
+          "reason": "지어낸 1234 꼴 번호(누구의 번호도 아님)"
+        },
+        {
+          "line": null,
+          "allow": "010 1234 2222",
+          "reason": "지어낸 1234 꼴 번호(누구의 번호도 아님)"
+        },
+        {
+          "line": null,
+          "allow": "010-1234-1111",
+          "reason": "지어낸 1234 꼴 번호(누구의 번호도 아님)"
+        },
+        {
+          "line": null,
+          "allow": "010-1234-3333",
+          "reason": "지어낸 1234 꼴 번호(누구의 번호도 아님)"
+        },
+        {
+          "line": null,
+          "allow": "01012341111",
+          "reason": "지어낸 1234 꼴 번호(누구의 번호도 아님)"
+        },
+        {
+          "line": null,
+          "allow": "01012344444",
+          "reason": "지어낸 1234 꼴 번호(누구의 번호도 아님)"
+        }
+      ]
+    },
+    {
+      "path": "android/build.gradle.kts",
+      "origin": "new",
+      "treatment": "new",
+      "sha256": "3682944f57bb71558679bd375b0c7960cf356acab210d737f76e5e986068fb27"
+    },
+    {
+      "path": "android/build_apk.py",
+      "origin": "new",
+      "treatment": "new",
+      "sha256": "02084c40ec1b0dac5c124d03d364991512803f6b7067dd8d00b78ed13aba1795"
+    },
+    {
+      "path": "android/gradle.properties",
+      "origin": "new",
+      "treatment": "new",
+      "sha256": "0117454be559befab95375318f728ff4e18ca0790731fa1f0362b8c7db6bd22f"
+    },
+    {
+      "path": "android/settings.gradle.kts",
+      "origin": "new",
+      "treatment": "new",
+      "sha256": "3a66437d6b86691c52fbebc54f59528dc85d76dd81e31153022aef16f48ea33a"
     },
     {
       "path": "app/README.md",
       "origin": "new",
       "treatment": "new",
-      "sha256": "2cee92a2e2b31d100ac1245ef0d0ba2879ea9fbea23e8890974bee0e85b62a37"
+      "sha256": "d859cbd0b9749f83fdb51073263ba974651e054b679f2b8879555a0030cb0d2e"
     },
     {
       "path": "app/__init__.py",
@@ -106,7 +319,7 @@
       "path": "app/config/default.json",
       "origin": "new",
       "treatment": "new",
-      "sha256": "cfe5bfab94c5dd835c80727f9e6a2a1741141d3542d415f29a54c8721c3b06cb",
+      "sha256": "502265a8171c3c5c02e37fd97b798f47603a7bb1a98e404034f0761767dbd61a",
       "note": "기본 설정(개인 값 없음, 실행·펫 옷 칸) — 7단계"
     },
     {
@@ -204,11 +417,66 @@
       "note": "관찰자(지연·메아리 상관) 부분만 옮겨 고침"
     },
     {
+      "path": "app/core/phone.py",
+      "origin": "new",
+      "treatment": "new",
+      "sha256": "9d61d7113a0ef5a87f59ac1f342b5cc6dc7aaf405606fb1ae830a7927caf4c17",
+      "exceptions": [
+        {
+          "line": null,
+          "allow": "10.0.0.0/8",
+          "reason": "테일스케일 주소 대역(공개된 표준 대역 — 허용 여부 판단에 씀)"
+        },
+        {
+          "line": null,
+          "allow": "100.64.0.0/10",
+          "reason": "테일스케일 주소 대역(공개된 표준 대역 — 허용 여부 판단에 씀)"
+        },
+        {
+          "line": null,
+          "allow": "127.0.0.0/8",
+          "reason": "테일스케일 주소 대역(공개된 표준 대역 — 허용 여부 판단에 씀)"
+        },
+        {
+          "line": null,
+          "allow": "169.254.0.0/16",
+          "reason": "테일스케일 주소 대역(공개된 표준 대역 — 허용 여부 판단에 씀)"
+        },
+        {
+          "line": null,
+          "allow": "172.16.0.0/12",
+          "reason": "테일스케일 주소 대역(공개된 표준 대역 — 허용 여부 판단에 씀)"
+        },
+        {
+          "line": null,
+          "allow": "192.0.2.1",
+          "reason": "테일스케일 주소 대역(공개된 표준 대역 — 허용 여부 판단에 씀)"
+        },
+        {
+          "line": null,
+          "allow": "192.168.0.0/16",
+          "reason": "테일스케일 주소 대역(공개된 표준 대역 — 허용 여부 판단에 씀)"
+        },
+        {
+          "line": null,
+          "allow": "fd7a:115c:a1e0::/48",
+          "reason": "테일스케일 주소 대역(공개된 표준 대역 — 허용 여부 판단에 씀)"
+        }
+      ]
+    },
+    {
       "path": "app/core/prompt.py",
       "origin": "new",
       "treatment": "new",
       "sha256": "0600689a68075841770aa9ef4ba3d4eb9a2342c4db96e6efffa9d344f538be95",
       "note": "고정 앞부분 지시문·도구 안내"
+    },
+    {
+      "path": "app/core/qrcodegen.py",
+      "origin": "derived:nayuki/QR-Code-generator (MIT)",
+      "treatment": "modified",
+      "sha256": "b089855caf16185c61421ea4927c1b213cf9468940d71fa8ab11ef83662dcc84",
+      "note": "QR 만들기 — MIT 원본을 줄여 옮김(THIRD_PARTY_LICENSES 에 적음)"
     },
     {
       "path": "app/core/redact.py",
@@ -228,14 +496,14 @@
       "path": "app/core/session.py",
       "origin": "new",
       "treatment": "new",
-      "sha256": "31ff4aa64991277926d5dad6cdde63842c10ef343c84cd2a5176aa64fc0a6b57",
+      "sha256": "76b5358d7883095e18a40b868d5c8334582b55a0cfdc21cc76470470feb64f1d",
       "note": "파이프라인 묶기·글 입력·저장"
     },
     {
       "path": "app/core/settings_api.py",
       "origin": "new",
       "treatment": "new",
-      "sha256": "1b46e38807ada1b05f41978a10a48c58676207ef750a73032e2068aacfe84e2f",
+      "sha256": "707ed5d68a921cfd9bc1b266d7f01324c2e60f41789052518e2ed08bfaa1e098",
       "note": "설정 화면 값 검사·반영 시점·열쇠 저장·두뇌 연결 시험·펫 옷 받기 — 7단계"
     },
     {
@@ -249,7 +517,7 @@
       "path": "app/core/stt.py",
       "origin": "derived:운영판 비서 부품을 고쳐 옮김",
       "treatment": "modified",
-      "sha256": "e81993f85f8f89171bdfe655b1656cddc270ffd435bb7c5cda997e708fa2b692",
+      "sha256": "fd2f9c96ed4a0e8ee06673d13277601b8f7f828b21a5bc600a723d1ba9fe967f",
       "note": "귀 연결·메아리 판정 부분만 옮겨 고침"
     },
     {
@@ -302,6 +570,12 @@
       "note": "귀·목소리 서버 연결"
     },
     {
+      "path": "app/core/voiceprint.py",
+      "origin": "new",
+      "treatment": "new",
+      "sha256": "27c8d8fde836f0af1c0d0926f29a67c417d637f69cb9b85f2a7dfc9444c0578e"
+    },
+    {
       "path": "app/core/wake.py",
       "origin": "derived:운영판 비서 부품을 고쳐 옮김",
       "treatment": "modified",
@@ -326,7 +600,7 @@
       "path": "app/main.py",
       "origin": "new",
       "treatment": "new",
-      "sha256": "b2bdde6a4f26cd9152d6591f3a5be060e3d7553463a60c0050553dfa15c17787",
+      "sha256": "7ea7e3fc9b7d160422f421bae072eaf9a6fefa77c304dd7bb5870302edd540cf",
       "note": "본체 실행(serve/script/check)·펫 옷 설정 펫에 알리기·부모 PID 지켜보기 — 7단계"
     },
     {
@@ -389,7 +663,7 @@
       "path": "app/tools/basic/handlers.py",
       "origin": "new",
       "treatment": "new",
-      "sha256": "a4ede0fe6b16b3bb2fd324c25c28bcc9db6276897307da3528e3b13295e6c5bb",
+      "sha256": "c8738ca0a9d1509ae3ec827ca76bdf6c3c8f5a95bbe153778df16b81583299a3",
       "note": "기본 도구 처리"
     },
     {
@@ -403,7 +677,7 @@
       "path": "app/tools/basic/tools.json",
       "origin": "new",
       "treatment": "new",
-      "sha256": "f42a2e2def44d8ea14281bd448db95a39bbb36b7d89a0dcbc385880f71801ef9",
+      "sha256": "4a6e33a5c05dac317c1f06c1f0beb2259ca6e07a6aeac0934388592aa495db01",
       "note": "기본 도구 10개 정의"
     },
     {
@@ -421,17 +695,29 @@
       "note": "웹 검색·페이지 읽기(캐시·내부 주소 막음)"
     },
     {
+      "path": "app/tools/phone/handlers.py",
+      "origin": "new",
+      "treatment": "new",
+      "sha256": "f16dbda4c3e3510ef6ff3f86a1414dcdbbd791db1d33c55f67fda3ce317f336f"
+    },
+    {
+      "path": "app/tools/phone/tools.json",
+      "origin": "new",
+      "treatment": "new",
+      "sha256": "911c473e151d6c4633bfd4b27cea32adbb5e06e6a7cbd68a5d7ef89f6c1b15dc"
+    },
+    {
       "path": "app/tools/registry.py",
       "origin": "new",
       "treatment": "new",
-      "sha256": "5a9e302bbd83f182fa26d565d821da9e8e3dd2fb510fe52a0ec2204a90c88e92",
+      "sha256": "3bb9e76714ab675e5bdd05f321cd0dea4ad408523f7f183e0fa4f24b7e8f671d",
       "note": "도구 묶음 읽기·상한·폭주 멈춤"
     },
     {
       "path": "app/ui/app.js",
       "origin": "new",
       "treatment": "new",
-      "sha256": "0a4232c595629ee1bc7f6c92134b567585b74c33c7ac93a5614db618242c28eb",
+      "sha256": "56646fe9f90fad054fa4dd7780f1c8c748010b631e972f5834d2e400bac076aa",
       "note": "화면(처음 화면·대화·기억·설정) — 5단계"
     },
     {
@@ -458,7 +744,7 @@
       "path": "app/ui/index.html",
       "origin": "new",
       "treatment": "new",
-      "sha256": "d09f59248d212ba3759fca9c12e748eb807e7e0b4d4146f61d813715c68c67df",
+      "sha256": "ad369c372e857f577aa5f15a6ef033f152182a75dccbd67f9a02004eb38f2d6e",
       "note": "화면(처음 화면·대화·기억·설정) — 5단계"
     },
     {
@@ -474,10 +760,16 @@
       "sha256": "9dab50c74ad028a7f24ccea26596fcd0cd81631bc06ae614bb445de717357ee3"
     },
     {
+      "path": "app/ui/phone.js",
+      "origin": "new",
+      "treatment": "new",
+      "sha256": "ff041a36da9c755af90728708928390ea1919e5b00ae09653da56f109a1db5de"
+    },
+    {
       "path": "app/ui/settings.js",
       "origin": "new",
       "treatment": "new",
-      "sha256": "fc2b130a4d996e1e329b8708097a4aac3b694fc0973b979147705dbc25b2f00d",
+      "sha256": "88ff67a55658d5836c0bc43bc83a291427a16b66c7de572df85d6aaefb39b8f3",
       "note": "화면(처음 화면·대화·기억·설정) — 5단계"
     },
     {
@@ -491,7 +783,7 @@
       "path": "app/ui/style.css",
       "origin": "new",
       "treatment": "new",
-      "sha256": "6d36b6ef11da48532bc537b418b8e103a808631943bb9d3f6b2f95a9d939dd62",
+      "sha256": "f9707f401514c2a5c32fdce6048445593e1ccc0fd00ae96ce1742b1c382607f5",
       "note": "화면(처음 화면·대화·기억·설정) — 5단계"
     },
     {
@@ -512,7 +804,7 @@
       "path": "app/version.py",
       "origin": "new",
       "treatment": "new",
-      "sha256": "878938dbbc9407e9306761176a1f914216fb6bf538a19825520eb9f70950583a",
+      "sha256": "992a2bdec46ff8b43cf6300dbd6625c437f23c61ada0c1a8ff1daf0cc6d89b51",
       "note": "판 번호 한 곳 — 9단계"
     },
     {
@@ -791,7 +1083,7 @@
       "path": "installer/setup_core.py",
       "origin": "new",
       "treatment": "new",
-      "sha256": "5d5fe4e4e0dcf09a6914a06c1701ba1d8650e00f0c558ad3824d7e10c0cb9a8a",
+      "sha256": "8ea1db243317c7fe9e5224d231424ca2c847421705199c4b103eedf39ebc5c28",
       "note": "설치 본체(부품·두뇌·모델·펫·아이콘·설정, 있으면 건너뜀) — 7단계"
     },
     {
@@ -1009,7 +1301,7 @@
       "path": "tests/README.md",
       "origin": "new",
       "treatment": "new",
-      "sha256": "0b667c21086d7f3f19fb96224e6e30e2dff1984fa09fd2da5c484eeea03db813"
+      "sha256": "797c208305bb493d1096bcfaa6bc5e0c493e9cf68c9b781b81cb4a46ff323fe0"
     },
     {
       "path": "tests/brain_eval/cases_ko.json",
@@ -1033,7 +1325,7 @@
       "path": "tests/e2e/fake_brain.py",
       "origin": "new",
       "treatment": "new",
-      "sha256": "032644fcb8aa5b00ea65d19cf9cc56df5088a7732207ab7d867315440a514ec4",
+      "sha256": "f60bc5ee7451f1837e138df8c7dcf88a18cc88d18bcae700a00e63a6adffa70b",
       "note": "가짜 두뇌(시험용)"
     },
     {
@@ -1107,6 +1399,104 @@
       "sha256": "3554516a6818406241ff07e620dce63a393c3a98b067bab6fb7c6c27378a0408"
     },
     {
+      "path": "tests/unit/test_phone.py",
+      "origin": "new",
+      "treatment": "new",
+      "sha256": "3e48eda4692735b01cf8c1ebc316a57bdb20a1f3ec89cab72e288fd5187ef9fd",
+      "exceptions": [
+        {
+          "line": null,
+          "allow": "10.0.0.2",
+          "reason": "시험·안내용으로 지어낸 사설·테일스케일 주소 예시(누구의 주소도 아님)"
+        },
+        {
+          "line": null,
+          "allow": "10.0.0.3",
+          "reason": "시험·안내용으로 지어낸 사설·테일스케일 주소 예시(누구의 주소도 아님)"
+        },
+        {
+          "line": null,
+          "allow": "10.1.2.3",
+          "reason": "시험·안내용으로 지어낸 사설·테일스케일 주소 예시(누구의 주소도 아님)"
+        },
+        {
+          "line": null,
+          "allow": "100.100.1.1",
+          "reason": "시험·안내용으로 지어낸 사설·테일스케일 주소 예시(누구의 주소도 아님)"
+        },
+        {
+          "line": null,
+          "allow": "172.16.5.5",
+          "reason": "시험·안내용으로 지어낸 사설·테일스케일 주소 예시(누구의 주소도 아님)"
+        },
+        {
+          "line": null,
+          "allow": "172.31.255.1",
+          "reason": "시험·안내용으로 지어낸 사설·테일스케일 주소 예시(누구의 주소도 아님)"
+        },
+        {
+          "line": null,
+          "allow": "172.32.0.1",
+          "reason": "시험·안내용으로 지어낸 사설·테일스케일 주소 예시(누구의 주소도 아님)"
+        },
+        {
+          "line": null,
+          "allow": "192.168.1.10",
+          "reason": "시험·안내용으로 지어낸 사설·테일스케일 주소 예시(누구의 주소도 아님)"
+        },
+        {
+          "line": null,
+          "allow": "192.168.1.2",
+          "reason": "시험·안내용으로 지어낸 사설·테일스케일 주소 예시(누구의 주소도 아님)"
+        },
+        {
+          "line": null,
+          "allow": "192.168.1.5",
+          "reason": "시험·안내용으로 지어낸 사설·테일스케일 주소 예시(누구의 주소도 아님)"
+        },
+        {
+          "line": null,
+          "allow": "192.168.1.6",
+          "reason": "시험·안내용으로 지어낸 사설·테일스케일 주소 예시(누구의 주소도 아님)"
+        },
+        {
+          "line": null,
+          "allow": "192.168.1.66",
+          "reason": "시험·안내용으로 지어낸 사설·테일스케일 주소 예시(누구의 주소도 아님)"
+        },
+        {
+          "line": null,
+          "allow": "192.168.1.67",
+          "reason": "시험·안내용으로 지어낸 사설·테일스케일 주소 예시(누구의 주소도 아님)"
+        },
+        {
+          "line": null,
+          "allow": "192.168.1.7",
+          "reason": "시험·안내용으로 지어낸 사설·테일스케일 주소 예시(누구의 주소도 아님)"
+        },
+        {
+          "line": null,
+          "allow": "192.168.1.8",
+          "reason": "시험·안내용으로 지어낸 사설·테일스케일 주소 예시(누구의 주소도 아님)"
+        },
+        {
+          "line": null,
+          "allow": "fd7a:115c:a1e0::1",
+          "reason": "시험·안내용으로 지어낸 사설·테일스케일 주소 예시(누구의 주소도 아님)"
+        },
+        {
+          "line": null,
+          "allow": "+82 10-1234-5678",
+          "reason": "지어낸 1234 꼴 번호(누구의 번호도 아님)"
+        },
+        {
+          "line": null,
+          "allow": "01012345678",
+          "reason": "지어낸 1234 꼴 번호(누구의 번호도 아님)"
+        }
+      ]
+    },
+    {
       "path": "tests/unit/test_radeon.py",
       "origin": "new",
       "treatment": "new",
@@ -1174,6 +1564,12 @@
       "treatment": "new",
       "sha256": "c64a1bc6dacec18a256e14f37ced91292cb40a63d14b4db72786c12400ad0614",
       "note": "옷→목소리 단위 시험(입은 옷으로 고르기·자동 설정·모르는 목소리 기본으로) — 0.1.11"
+    },
+    {
+      "path": "tests/unit/test_voiceprint.py",
+      "origin": "new",
+      "treatment": "new",
+      "sha256": "5dd1bd4fca9f41f1e44f815c09a731948db6c8af7a12ec62868adf7967e01787"
     },
     {
       "path": "tests/unit/test_winbox.py",

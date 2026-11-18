@@ -173,7 +173,7 @@ const STATE_TEXT = {"듣는 중": "듣고 있어요. 편하게 말씀하세요."
   "도구 사용 중": "찾아보고 있어요."};
 const TOOL_TEXT = {get_weather: "날씨를 보고 있어요", web_search: "검색하고 있어요", read_page: "페이지를 읽고 있어요",
   remember: "기억하고 있어요", recall: "예전 기억을 찾고 있어요", forget: "기억을 지우고 있어요", pc_action: "프로그램을 여는 중이에요",
-  type_text: "메모장에 적고 있어요",
+  type_text: "메모장에 적고 있어요", phone_action: "폰에서 여는 중이에요",
   calc: "계산하고 있어요", speech_speed: "말 빠르기를 바꿔요", standby: "쉬는 중으로 바꿔요"};
 
 function startEvents() {
@@ -215,6 +215,10 @@ function onEvent(ev) {
   if (t === "settings") { loadSettings().catch(() => {}); return; }
   if (t === "update") { Update.onEvent(ev); return; }
   if (t === "interp") { Interp.onEvent(ev); return; }
+  if (t === "confirm") { ToolConfirm.ask(ev); return; }
+  if (t === "confirm_done") { ToolConfirm.done(ev); return; }
+  if (t === "voice_gate") { Chat.sys("(안 들음 — 등록한 목소리가 아니에요" + (ev.text ? ": " + ev.text : "") + ")"); return; }
+  if (t === "phone") { Chat.sys(ev.state === "on" ? `폰(${ev.name || ""})으로 대화 중이에요. 이 창의 대화는 쉬어요.` : "폰 대화가 끝났어요."); return; }
   if (t === "conn" && !ev.on && Talk.on) { Talk.stop("대화가 끝났어요."); }
 }
 

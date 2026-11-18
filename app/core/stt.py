@@ -38,7 +38,7 @@ from .wake import hallucination as name_hallucination
 
 
 class EarSTT(SegmentedSTTService):
-    def __init__(self, state, port, ear=None, **kw):
+    def __init__(self, state, port, ear=None, voiceprint=None, **kw):
         super().__init__(sample_rate=16000, ttfs_p99_latency=0.6, trailing_silence_secs=0.3,
                          settings=STTSettings(model=None, language=Language.KO), **kw)
         self.state = state
@@ -52,6 +52,27 @@ class EarSTT(SegmentedSTTService):
         self._last_peek = 0.0
         self._peek_task = None
         self.corr_need = float(self.cfg["대화"].get("메아리_상관_기준", 0.9))
+        self.vp = voiceprint     # core/voiceprint.VoicePrint — '등록한 목소리만 명령 받기'(켰을 때만 씀)
+
+    def _spk_start(self, audio):
+        """등록한 목소리 문이 켜져 있으면 받아쓰기와 같이 목소리 점수를 계산(기다리는 시간 안 늘림)."""
+        vp = self.vp
+        if vp is None or not vp.gate_on():
+            return None
+        t = asyncio.ensure_future(asyncio.to_thread(vp.score_pcm, audio))
+        t.add_done_callback(lambda f: f.cancelled() or f.exception())    # 잡음·주변 말로 일찍 끝나 안 기다린 경우에도 오류 기록이 남지 않게
+        return t
+
+    async def _spk_is_me(self, task):
+        """→ (등록한 사람인가, 점수 결과). 문이 꺼져 있으면 (True, None)."""
+        if task is None:
+            return True, None
+        try:
+            r = await task
+        except Exception as ex:  # noqa: BLE001
+            logger.warning(f"목소리 확인 실패: {ex.__class__.__name__}")
+            return False, {"오류": ex.__class__.__name__}
+        return self.vp.is_me(r), r
 
     def _stop(self, text):
         return self.state.has_stop_word(text)
@@ -212,6 +233,7 @@ class EarSTT(SegmentedSTTService):
                 yield f
             return
         standby = st.wake and not st.in_follow(meta.get("t_start"))
+        spk = self._spk_start(audio)
         await self.start_processing_metrics()
         try:
             if standby:
@@ -258,6 +280,13 @@ class EarSTT(SegmentedSTTService):
             st.event("unduck")
             return
         if verdict == "noise":
+            st.event("unduck")
+            return
+        me, sr = await self._spk_is_me(spk)
+        if not me:
+            # 등록한 목소리만 명령 받기: 다른 사람 말(또는 점수를 못 낸 아주 짧은 말)은 두뇌로 안 넘김. 화면엔 '안 들음' 표시만.
+            logger.info(f"등록한 목소리가 아니라 안 받음(점수 {None if not sr else sr.get('점수')}, {len(text)}자)")
+            st.event("voice_gate", text=text[:60], score=(sr or {}).get("점수"), short=bool((sr or {}).get("짧음")))
             st.event("unduck")
             return
         text = apply_fixes(text, st.fixes)
@@ -307,6 +336,7 @@ class EarSTT(SegmentedSTTService):
         """통역 모드 한 마디: 감지한 언어로 받아씀 → 번역(도구·대화 기록 없는 번역 전용 요청) → 그 언어 목소리로 말함(tts.py).
         한국어 '통역 그만'·화면 '끄기'로 끔. 다른 사람 말은 절대 두뇌 대화·도구로 넘기지 않는다(번역만)."""
         st, cfg = self.state, self.cfg
+        spk = self._spk_start(audio)
         await self.start_processing_metrics()
         try:
             r = await self.ear.transcribe(audio, langs=interp.ear_args(cfg))
@@ -334,6 +364,14 @@ class EarSTT(SegmentedSTTService):
         st.last_asr_t = time.time()
         st.event("asr", text=text, verdict="interp", lang=src, asr_ms=asr_ms, audio_sec=round(r.get("audio_sec", 0), 2))
         cmd = interp.L.parse_command(cfg, text) if src == "ko" else None
+        if cmd:
+            me, sr = await self._spk_is_me(spk)
+            if not me:   # 등록한 목소리만 명령 받기: 상대가 '통역 그만'이라고 해도 끄지 않고 번역만
+                logger.info(f"통역 켜기·끄기 말이지만 등록한 목소리가 아님(점수 {None if not sr else sr.get('점수')}) → 번역만")
+                st.event("voice_gate", text=text[:60], score=(sr or {}).get("점수"), interp=True)
+                cmd = None
+        elif spk is not None:
+            spk.cancel()
         if cmd and cmd[0] == "off":
             interp.turn_off("말로 끔")
             st.event("user", text=text)

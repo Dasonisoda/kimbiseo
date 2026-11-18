@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 암호화 안 된 연결은 안 씀 — PC 와는 HTTPS·WSS(PC 가 만든 인증서, 짝지을 때 받은 지문과 같을 때만, Net.kt) -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+</network-security-config>

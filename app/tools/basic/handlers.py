@@ -124,6 +124,10 @@ async def speech_speed(ctx, a):
 # ---------------- 대기
 async def standby(ctx, a):
     st = ctx.state
+    link = ctx.actions.get("phone")
+    if link is not None:      # 폰 앱: 이 말을 다 들려준 뒤 폰이 대화를 끝내고 첫 화면으로(다시 말하려면 마이크 단추)
+        link.send({"type": "standby"})
+        return {"대기": True, "안내": "대화를 마칩니다. '네, 필요하면 다시 불러 주세요.'처럼 한 문장으로만 답하세요."}
     st.set_wake(True, why="대기 도구")
     st.wake_until = 0.0
     name = st.names.name

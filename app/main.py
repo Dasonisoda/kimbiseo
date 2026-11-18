@@ -55,10 +55,13 @@ CLIENT_AUDIO = {}       # 화면이 알려 준 마이크 처리 상태(메아리
 SYS = {}                # 마지막 사양 보기 결과
 QUEUES = set()          # /api/events 받는 곳
 LOOP = None
+VP = None               # 내 목소리 등록·확인(core/voiceprint) — '등록한 목소리만 명령 받기'
+PHONE = {"auth": None, "gw": None}      # 폰 연결(core/phone) — 등록 기기·관문 서버
+CONFIRMS = {}           # PC 창 '실행할까요?' 단추 기다림 {id: Future}
 UI_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ui")
 UI_EVENTS = {"status", "user", "bot", "typed", "asr", "tool", "wake_mode", "wake", "name_call", "interrupted",
              "brain_error", "speed", "settings_applied", "names", "session", "settings", "client_audio", "echo",
-             "barge", "tool_halt", "conn", "update", "interp"}
+             "barge", "tool_halt", "conn", "update", "interp", "confirm", "confirm_done", "voice_gate", "phone"}
 
 
 def _make_memory():
@@ -69,7 +72,7 @@ def _make_memory():
 
 
 def _setup(settings):
-    global CFG, MEM, PET, SETTINGS_PATH
+    global CFG, MEM, PET, SETTINGS_PATH, VP
     SETTINGS_PATH = os.path.abspath(C.user_settings_path(settings))
     CFG = C.load(settings, warn=lambda m: logger.warning(m))
     CFG["_settings_path"] = SETTINGS_PATH
@@ -90,6 +93,10 @@ def _setup(settings):
         logger.add(sys.stderr, level="INFO", filter=_quiet, diagnose=False, backtrace=False)   # 변수 값(열쇠 등)이 오류 기록에 찍히지 않게
     logger.add(os.path.join(logs, "body_{time:YYYYMMDD}.log"), rotation="1 day", retention=14, level="INFO", encoding="utf-8", filter=_quiet,
                diagnose=False, backtrace=False)
+    from .core.voiceprint import VoicePrint
+    VP = VoicePrint(CFG, log=logger.info)
+    from .core import phone as PH
+    PHONE["auth"] = PH.PhoneAuth(os.path.join(PH.secret_dir(CFG), "phones.json"), os.path.join(logs, "phone_access.jsonl"))
 
 
 def _reload():
@@ -237,8 +244,13 @@ async def run_script(script_path, out_dir):
         log_f.write(json.dumps({**x, "rt": round(room.now(), 3)}, ensure_ascii=False, default=str) + "\n")
         log_f.flush()
 
-    s = Session(CFG, lambda d: WavTransport(room, ducker=d), memory=MEM, guards=GUARDS, pet=PET,
-                send_ui=ui, opts={"greeting": sc.get("greeting", True), "새대화": sc.get("new_conversation", False)})
+    opts = {"greeting": sc.get("greeting", True), "새대화": sc.get("new_conversation", False), "voiceprint": VP}
+    if "confirm_answer" in sc:          # 시험: 위험한 도구의 '실행할까요?'에 대본이 정한 답(true/false)
+        async def _answer(text, timeout=45.0, _v=bool(sc["confirm_answer"])):
+            ui({"type": "confirm", "text": text, "answer": _v})
+            return _v
+        opts["confirm"] = _answer
+    s = Session(CFG, lambda d: WavTransport(room, ducker=d), memory=MEM, guards=GUARDS, pet=PET, send_ui=ui, opts=opts)
 
     async def drive(sess):
         await asyncio.sleep(0.3)
@@ -329,7 +341,8 @@ def make_app():
     port = int(CFG["포트"]["본체"])
     secret = G.shutdown_secret(os.path.join(C.path(CFG, "자료"), "secrets"))
     names = set(G.LOOP_NAMES)
-    binary = {"/api/ear/hear": ("application/octet-stream",)}
+    binary = {"/api/ear/hear": ("application/octet-stream",), "/api/voiceprint/clip": ("application/octet-stream",),
+              "/api/voiceprint/test": ("application/octet-stream",)}
 
     @app.middleware("http")
     async def guard(request: Request, call_next):
@@ -375,20 +388,56 @@ def make_app():
         return _ui(name)
 
     # ---------------------------------------------------------------- 대화 연결
-    async def kick():
+    async def kick(who="PC 창"):
+        """한 번에 한 기기만 대화 — 새 연결(PC 창·폰)이 오면 앞 대화를 끝냄. 앞이 폰이면 폰에 먼저 알림."""
         s = CURRENT.get("session")
+        link = CURRENT.get("link")
+        if link is not None:
+            link.send({"type": "kicked", "by": who})
+            await asyncio.sleep(0.3)        # 알림이 먼저 닿게
         if s is not None and s.worker is not None:
-            logger.info("새 연결 — 앞 대화를 끝냄(한 번에 한 기기)")
+            logger.info(f"새 연결({who}) — 앞 대화를 끝냄(한 번에 한 기기)")
             try:
                 await s.worker.cancel()
             except Exception:  # noqa: BLE001
                 pass
+            for _ in range(30):             # 앞 대화의 귀·목소리 연결이 풀릴 때까지 잠깐(최대 3초)
+                if CURRENT.get("session") is not s:
+                    break
+                await asyncio.sleep(0.1)
+
+    # ---------------------------------------------------------------- 위험한 도구의 '실행할까요?'(PC 창) — registry.confirmed 가 부름
+    async def pc_confirm(text, timeout=45.0):
+        if not QUEUES:
+            return False                    # 화면이 안 떠 있으면 묻지 못함 → 실행 안 함
+        import secrets as _sec
+        cid = _sec.token_hex(6)
+        fut = asyncio.get_running_loop().create_future()
+        CONFIRMS[cid] = fut
+        broadcast({"type": "confirm", "id": cid, "text": str(text)[:300], "초": int(timeout)})
+        try:
+            return bool(await asyncio.wait_for(fut, timeout))
+        except asyncio.TimeoutError:
+            return False
+        finally:
+            CONFIRMS.pop(cid, None)
+            broadcast({"type": "confirm_done", "id": cid})
+
+    @app.post("/api/confirm")
+    async def confirm_answer(request: Request):
+        b = await request.json()
+        fut = CONFIRMS.get(str((b or {}).get("id") or ""))
+        if fut is None or fut.done():
+            return JSONResponse({"ok": False, "오류": "이미 끝난 확인이에요"}, status_code=404)
+        fut.set_result((b or {}).get("ok") is True)
+        return {"ok": True}
 
     async def run_conn(conn: SmallWebRTCConnection, greeting=True):
         def tf(_ducker):
             return SmallWebRTCTransport(webrtc_connection=conn, params=TransportParams(
                 audio_in_enabled=True, audio_out_enabled=True, audio_in_sample_rate=16000, audio_out_sample_rate=24000))
-        s = Session(CFG, tf, memory=MEM, guards=GUARDS, pet=PET, send_ui=broadcast, opts={"greeting": greeting})
+        s = Session(CFG, tf, memory=MEM, guards=GUARDS, pet=PET, send_ui=broadcast,
+                    opts={"greeting": greeting, "confirm": pc_confirm, "voiceprint": VP})
         CURRENT["session"] = s
 
         async def start(sess):
@@ -548,6 +597,10 @@ def make_app():
             PET.names = [C.names(CFG)[0]] + C.names(CFG)[1]
         pet_said = await asyncio.to_thread(_tell_pet, keys) if {"펫.옷_받기", "펫.옷"} & set(keys) else {}
         voice_said = await asyncio.to_thread(_tell_voice) if set(S.VOICE_GEN_KEYS) & set(keys) else {}
+        phone_said = {}
+        if {"폰.켜기", "폰.테일스케일_허용"} & set(keys):
+            await phone_apply()
+            phone_said = gw.info()
         if "두뇌.방식" in keys or "두뇌.구독_GPT_모델" in keys:
             from .core import cli_brain
             asyncio.ensure_future(cli_brain.shutdown_except(str(CFG["두뇌"].get("방식"))))
@@ -556,7 +609,7 @@ def make_app():
             logger.info(f"설정 바뀜: {', '.join(keys)} → 지금 대화 반영 {applied}")
             broadcast({"type": "settings", "keys": keys, "applied": applied})
         return {"ok": True, "바뀜": keys, "반영": groups, "지금_대화에_반영": applied, "경고": warns,
-                "다시켜기_필요": PENDING, "설정": S.view(CFG), "펫": pet_said, "목소리서버": voice_said}
+                "다시켜기_필요": PENDING, "설정": S.view(CFG), "펫": pet_said, "목소리서버": voice_said, "폰": phone_said}
 
     # ---------------------------------------------------------------- 펫 크기(펫이 제 설정에 기억 — 본체는 전해 주기만)
     @app.get("/api/pet/size")
@@ -759,23 +812,35 @@ def make_app():
         except ValueError:
             b = {}
         b = b if isinstance(b, dict) else {}
-        on = b.get("켜기")
-        lang = str(b.get("언어") or "").strip()
+        err = interp_set(b.get("켜기"), str(b.get("언어") or "").strip(), "화면 단추")
+        if err:
+            return JSONResponse({"ok": False, "오류": err}, status_code=400)
+        return {"ok": True, **interp.view(CFG)}
+
+    def interp_set(on, lang, why):
+        """통역 켜기·끄기·언어 바꾸기(PC 화면 단추·폰 통역 화면 공통) → 오류 글 또는 ''."""
         if on is False:
-            interp.turn_off("화면 단추")
-            broadcast({"type": "interp", "state": "off", **interp.view(CFG)})
-            return {"ok": True, **interp.view(CFG)}
+            interp.turn_off(why)
+            broadcast_all({"type": "interp", "state": "off", **interp.view(CFG)})
+            return ""
         if not interp.enabled(CFG):
-            return JSONResponse({"ok": False, "오류": "설정에서 통역이 꺼져 있어요"}, status_code=400)
+            return "설정에서 통역이 꺼져 있어요"
         if lang and lang != "auto" and lang not in interp.L.langs(CFG):
-            return JSONResponse({"ok": False, "오류": "모르는 언어예요"}, status_code=400)
+            return "모르는 언어예요"
         if on is True or not interp.active(CFG):
             interp.turn_on(CFG, lang or "auto")
         if lang:
             interp.set_mode(CFG, lang)
         interp.warm_voice(CFG)
-        broadcast({"type": "interp", "state": "on", **interp.view(CFG)})
-        return {"ok": True, **interp.view(CFG)}
+        broadcast_all({"type": "interp", "state": "on", **interp.view(CFG)})
+        return ""
+
+    def broadcast_all(ev):
+        """PC 화면 + 지금 폰 대화(있으면)."""
+        broadcast(ev)
+        link = CURRENT.get("link")
+        if link is not None:
+            link.ui(ev)
 
     @app.get("/api/interp/runtime")
     async def interp_runtime_get():
@@ -800,6 +865,207 @@ def make_app():
                                       cwd=os.path.dirname(setup_py), creationflags=getattr(sp, "CREATE_NO_WINDOW", 0))
         logger.info(f"통역 목소리 설치 시작 PID {interp_job['proc'].pid}")
         return {"ok": True, "PID": interp_job["proc"].pid}
+
+    # ---------------------------------------------------------------- 폰 연결(선택, 기본 꺼짐) — core/phone.py
+    from .core import phone as PH
+    auth = PHONE["auth"]
+
+    def phone_status(_did=None):
+        """폰 앱에 보여 줄 것(비밀값·주소 없음)."""
+        return {"비서": C.names(CFG)[0], "판": APP_VERSION, "PC": (os.environ.get("COMPUTERNAME") or "PC")[:30],
+                "통역": interp.enabled(CFG), "목소리확인": bool(VP and VP.gate_on()),
+                "PC조작": bool((CFG.get("폰") or {}).get("PC조작_허용", True))}
+
+    async def run_phone(ws, did, hello):
+        name = str((auth.devices.get(did) or {}).get("이름") or "폰")
+        await kick(f"폰 {name}")
+        link = PH.PhoneLink(ws, did, name, caps={k: hello.get(k) is True for k in ("open_app", "navigate", "dial", "sms", "confirm")})
+        link.loop = asyncio.get_running_loop()
+        pc = CFG.get("폰") or {}
+
+        def tf(_ducker):
+            return PH.make_transport(ws, link, lead=float(pc.get("앞서보내기_초", 1.5) or 0), hold=float(pc.get("처음모으기_초", 1.0) or 0))
+
+        def ui(ev):
+            broadcast(ev)
+            link.ui(ev)
+        s = Session(CFG, tf, memory=MEM, guards=GUARDS, pet=None, send_ui=ui,
+                    opts={"greeting": hello.get("greeting") is True, "phone": link, "voiceprint": VP})
+        CURRENT["session"], CURRENT["link"] = s, link
+
+        def on_interp(m):
+            err = interp_set(m.get("on") if isinstance(m.get("on"), bool) else None, str(m.get("lang") or "").strip()[:8], "폰 통역 화면")
+            if err:
+                link.send({"type": "interp", "state": "error", "why": err})
+        link.handlers = {"text": lambda m: s.send_text(str(m.get("text") or "")[:2000]),
+                         "interp": on_interp,
+                         "interp_get": lambda m: link.send({"type": "interp", "state": "view", **interp.view(CFG)}),
+                         "bye": lambda m: s.worker.cancel() if s.worker is not None else None}
+
+        async def start(sess):
+            tr = sess.transport
+
+            @tr.event_handler("on_client_connected")
+            async def _c(_t, _cl):
+                broadcast({"type": "conn", "on": True, "via": "폰", "name": name})
+                broadcast({"type": "phone", "state": "on", "name": name})
+                await sess.warmup()
+                await sess.greet()
+
+            @tr.event_handler("on_client_disconnected")
+            async def _d(_t, _cl):
+                await sess.worker.cancel()
+        s.build_hook = start
+        logger.info(f"폰 대화 시작: {did}")
+        try:
+            await _run_with_hook(s)
+        finally:
+            link.close()
+            if CURRENT.get("session") is s:
+                CURRENT["session"], CURRENT["link"] = None, None
+                broadcast({"type": "conn", "on": False})
+            broadcast({"type": "phone", "state": "off", "name": name})
+            logger.info(f"폰 대화 끝: {did}")
+
+    gw = PHONE["gw"] = PH.Gateway(CFG, auth, run_phone, phone_status)
+
+    @app.on_event("startup")
+    async def _phone_start():
+        if PH.enabled(CFG):
+            await gw.start()
+
+    async def phone_apply():
+        """설정 폰.켜기·테일스케일_허용 을 바꾼 뒤 — 관문을 다시 켜거나 끔. 끄면 지금 폰 대화도 끝냄."""
+        if not PH.enabled(CFG) and CURRENT.get("link") is not None:
+            await kick("폰 연결 끔")
+        await gw.start()
+
+    @app.get("/api/phone")
+    async def phone_get():
+        link = CURRENT.get("link")
+        return {"ok": True, **gw.info(), "기기": auth.list(), "코드_남은초": auth.code_left(),
+                "대화중_폰": link.name if link is not None else None}
+
+    @app.post("/api/phone/code")
+    async def phone_code():
+        if not gw.running():
+            return JSONResponse({"ok": False, "오류": "폰 연결을 먼저 켜 주세요"}, status_code=400)
+        addrs = PH.lan_addresses(CFG)
+        if not addrs:
+            return JSONResponse({"ok": False, "오류": "이 PC 가 집 안 네트워크(와이파이·유선)에 연결돼 있지 않아요"}, status_code=400)
+        code, ttl = auth.new_code()
+        url = PH.pair_url(addrs, PH.port(CFG), code, gw.fp, phone_status()["PC"])
+        return {"ok": True, "코드": code, "초": ttl, "주소": addrs, "포트": PH.port(CFG), "지문": PH.fp_words(gw.fp), "QR": PH.qr_svg(url)}
+
+    @app.post("/api/phone/remove")
+    async def phone_remove(request: Request):
+        b = await request.json()
+        did = None if (b or {}).get("전부") is True else str((b or {}).get("기기") or "")
+        if did == "":
+            return JSONResponse({"ok": False, "오류": "지울 기기를 골라 주세요"}, status_code=400)
+        link = CURRENT.get("link")
+        n = auth.remove(did)
+        if link is not None and (did is None or link.did == did):
+            await kick("등록 지움")
+        return {"ok": True, "지움": n, "기기": auth.list()}
+
+    # ---------------------------------------------------------------- 내 목소리 등록(선택) — core/voiceprint.py
+    vp_clips = []
+    vp_job = {"proc": None}
+    vp_status = os.path.join(C.path(CFG, "로그"), "voiceprint_status.json")
+
+    def vp_install_state():
+        st = {}
+        try:
+            with open(vp_status, encoding="utf-8") as f:
+                st = json.load(f)
+        except (OSError, ValueError):
+            pass
+        p = vp_job["proc"]
+        return {"설치중": bool(p is not None and p.poll() is None),
+                "진행": {k: st.get(k) for k in ("끝", "성공", "전체", "글", "오류")} if st else None}
+
+    @app.get("/api/voiceprint")
+    async def vp_get():
+        from .core.voiceprint import ENROLL_MIN, SENTENCES
+        return {"ok": True, **VP.view(), "모은문장": len(vp_clips), "받기": vp_install_state(), "읽을문장": list(SENTENCES),
+                "최소문장": ENROLL_MIN}
+
+    def _pcm_ok(pcm):
+        return 16000 <= len(pcm) <= EAR_MAX_BYTES and len(pcm) % 2 == 0
+
+    @app.post("/api/voiceprint/clip")
+    async def vp_clip(request: Request):
+        from .core.voiceprint import ENROLL_MIN_SEC, SR, speech_part
+        pcm = await request.body()
+        if not _pcm_ok(pcm):
+            return JSONResponse({"ok": False, "오류": "소리 길이가 맞지 않아요(0.5~12초)"}, status_code=400)
+        if not VP.ready():
+            return JSONResponse({"ok": False, "오류": "목소리 확인 모델을 먼저 받아 주세요"}, status_code=400)
+        import numpy as np
+        sec = len(speech_part(np.frombuffer(pcm, np.int16).astype(np.float32) / 32768.0)) / SR
+        if sec < ENROLL_MIN_SEC:
+            return {"ok": True, "받음": False, "말_초": round(sec, 1), "모은문장": len(vp_clips),
+                    "안내": "말소리가 짧게 들렸어요. 문장을 끝까지 또박또박 읽어 주세요."}
+        if len(vp_clips) >= 8:
+            vp_clips.pop(0)
+        vp_clips.append(pcm)
+        return {"ok": True, "받음": True, "말_초": round(sec, 1), "모은문장": len(vp_clips)}
+
+    @app.post("/api/voiceprint/finish")
+    async def vp_finish():
+        try:
+            ok, msg, info = await asyncio.to_thread(VP.enroll, list(vp_clips))
+        except Exception as ex:  # noqa: BLE001
+            return JSONResponse({"ok": False, "오류": f"등록하지 못했어요({ex.__class__.__name__})"}, status_code=500)
+        if ok:
+            vp_clips.clear()
+            logger.info(f"내 목소리 등록: {msg}")
+        return {"ok": ok, "글": msg, **info, **VP.view()} if ok else JSONResponse({"ok": False, "오류": msg, **info}, status_code=400)
+
+    @app.post("/api/voiceprint/reset")
+    async def vp_reset():
+        vp_clips.clear()
+        return {"ok": True, "모은문장": 0}
+
+    @app.post("/api/voiceprint/forget")
+    async def vp_forget():
+        vp_clips.clear()
+        VP.forget()
+        logger.info("내 목소리 등록 지움")
+        return {"ok": True, **VP.view()}
+
+    @app.post("/api/voiceprint/test")
+    async def vp_test(request: Request):
+        pcm = await request.body()
+        if not _pcm_ok(pcm):
+            return JSONResponse({"ok": False, "오류": "소리 길이가 맞지 않아요(0.5~12초)"}, status_code=400)
+        if VP.me is None:
+            return JSONResponse({"ok": False, "오류": "먼저 목소리를 등록해 주세요"}, status_code=400)
+        r = await asyncio.to_thread(VP.score_pcm, pcm)
+        return {"ok": True, **r, "문턱": VP.threshold(bool(r.get("짧음"))), "같은사람": VP.is_me(r)}
+
+    @app.get("/api/voiceprint/install")
+    async def vp_install_get():
+        return {"ok": True, **vp_install_state(), "모델있음": VP.ready()}
+
+    @app.post("/api/voiceprint/install")
+    async def vp_install():
+        p = vp_job["proc"]
+        if p is not None and p.poll() is None:
+            return {"ok": True, "이미": True}
+        if VP.ready():
+            return {"ok": True, "이미있음": True}
+        try:
+            os.remove(vp_status)
+        except OSError:
+            pass
+        sp = __import__("subprocess")
+        vp_job["proc"] = sp.Popen([sys.executable.replace("pythonw.exe", "python.exe"), "-B", "-X", "utf8", setup_py, "voiceprint-install",
+                                   "--prefix", prefix, "--data", C.path(CFG, "자료"), "--status", vp_status],
+                                  cwd=os.path.dirname(setup_py), creationflags=getattr(sp, "CREATE_NO_WINDOW", 0))
+        logger.info(f"목소리 확인 모델 받기 시작 PID {vp_job['proc'].pid}")
+        return {"ok": True, "PID": vp_job["proc"].pid}
 
     # ---------------------------------------------------------------- 펫 프로그램(실행 틀)만 다시 설치 — 설치 때 '펫' 단계를 못 받았을 때
     pet_job = {"proc": None}

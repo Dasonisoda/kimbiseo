@@ -14,6 +14,8 @@
 #       통역 원어민 목소리(선택) — 김비서 설정 → 통역 '통역 목소리 받기'가 부름. runtime\python-interp(locks/interp.json: Kokoro·Piper, CPU)
 #       + 목소리 모델(installer/interp/models.json — models.json 과 따로(업데이트 DEPS 에 안 걸리게): Kokoro-82M · Piper 독일어·그리스어·러시아어·터키어, 약 640MB). Piper(GPL-3.0)는
 #       사용자 PC 가 PyPI 에서 직접 받아 따로 도는 프로그램(voice/interp_voice.py)에서만 씀 — 우리는 다시 나눠 주지 않음.
+#   python setup_core.py voiceprint-install --prefix … --data … --status <상태 파일>
+#       내 목소리 확인 모델(선택, models.json 의 titanet-small 약 40MB) — 김비서 설정 → 내 목소리 '확인 모델 받기'가 부름.
 # 0.1.4~ 두뇌: 이 PC 에 클로드 코드·Codex 로그인이 있으면 Gemma 를 받지 않음(plan.py). 업데이트(덮어 설치) 때
 #   이미 있는 Gemma·두뇌 프로그램은 지우지 않고, 설정의 두뇌 경로는 디스크에 실제 있는 파일로 맞춘다.
 #
@@ -1220,6 +1222,33 @@ class Installer:
         self.st.log("==== 통역 목소리 설치 끝")
         return 0
 
+    # ---- 내 목소리 확인 모델(선택) — 설정 → 내 목소리 '확인 모델 받기'. models.json 의 titanet-small(약 40MB)만 받음
+    def run_voiceprint(self):
+        os.makedirs(self.path("install"), exist_ok=True)
+        self.st.heartbeat()
+        self.st.log(f"==== 목소리 확인 모델 받기 시작 (김비서 {VERSION})")
+        for sid in ("python", "plan", "files", "packages", "brain", "pet"):
+            self.st.end(sid, "건너뜀", "목소리 확인 모델만")
+        self.state["plan"] = dict(self.state.get("plan") or {}, 모델=["titanet-small"])
+        for sid, fn in (("models", self.do_models),):
+            self.st.begin(sid)
+            t0 = time.time()
+            try:
+                r = fn()
+            except Fail as ex:
+                return self.fail(sid, ex.why.replace("'다시 하기'", "'확인 모델 받기'"), ex.detail)
+            except Exception as ex:  # noqa: BLE001
+                why, detail, info = self.explain(ex)
+                return self.fail(sid, why.replace("'다시 하기'", "'확인 모델 받기'"), detail, info)
+            state, text = r if isinstance(r, tuple) else ("됨", r or "")
+            self.st.end(sid, state, f"{text} ({time.time() - t0:.0f}초)")
+        self.st.end("finish", "됨", "받은 모델은 김비서가 바로 씀")
+        self.save_state()
+        self.st.d.update({"끝": True, "성공": True, "지금": "", "글": "목소리 확인 모델을 받았어요. 이제 내 목소리를 등록할 수 있어요.", "주의": []})
+        self.st.write(force=True)
+        self.st.log("==== 목소리 확인 모델 받기 끝")
+        return 0
+
     def run_pet(self):
         os.makedirs(self.path("install"), exist_ok=True)
         self.st.heartbeat()
@@ -1261,7 +1290,8 @@ class Installer:
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["install", "plan", "gemma-install", "gemma-remove", "pet-install", "pet-help", "interp-install"])
+    ap.add_argument("cmd", choices=["install", "plan", "gemma-install", "gemma-remove", "pet-install", "pet-help", "interp-install",
+                                    "voiceprint-install"])
     ap.add_argument("--prefix", default=os.path.expandvars(r"%LOCALAPPDATA%\KimBiseo"))
     ap.add_argument("--data", default=os.path.expandvars(r"%APPDATA%\KimBiseo"))
     ap.add_argument("--status", default="")
@@ -1296,7 +1326,8 @@ def main():
     if not a.status:
         a.status = os.path.join(a.prefix, "install", "gemma_status.json" if a.cmd.startswith("gemma") else
                                 "pet_status.json" if a.cmd == "pet-install" else
-                                "interp_status.json" if a.cmd == "interp-install" else "status.json")
+                                "interp_status.json" if a.cmd == "interp-install" else
+                                "voiceprint_status.json" if a.cmd == "voiceprint-install" else "status.json")
     os.makedirs(os.path.dirname(os.path.abspath(a.status)), exist_ok=True)
     if a.cmd == "gemma-remove":
         print(json.dumps(Installer(a).remove_gemma(), ensure_ascii=False))
@@ -1313,6 +1344,10 @@ def main():
         if os.path.isfile(a.status):
             os.remove(a.status)
         return Installer(a).run_interp()
+    if a.cmd == "voiceprint-install":
+        if os.path.isfile(a.status):
+            os.remove(a.status)
+        return Installer(a).run_voiceprint()
     return Installer(a).run()
 
 

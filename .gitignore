@@ -47,3 +47,7 @@ EBWebView/
 # 압축 산출물 (릴리스에만 올림)
 *.zip
 *.7z
+
+# 폰 앱(android) 빌드 찌꺼기
+.gradle/
+local.properties
